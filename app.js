@@ -399,16 +399,85 @@ const dashboard = {
 // ==========================================
 // 6. CONTENT & SYLLABUS MANAGER
 // ==========================================
+
+// ==========================================
+// HELPER: RENDER CONTENT ITEM (Restored from Uploaded Version)
+// ==========================================
+function renderContentItem(file, unitId, myWork) {
+    let emoji = getContentEmoji(file.type);
+    let actionHtml = '';
+    let descHtml = '';
+
+    // Description & Due Date
+    if (file.data) {
+        if (file.data.description) descHtml = `<div class="text-xs text-gray-500 mt-1 ml-11 line-clamp-2">${file.data.description}</div>`;
+        if (file.data.dueDate) descHtml += `<div class="ml-11 mt-1 text-[10px] font-bold text-red-500 flex items-center gap-1"><i class="ph ph-calendar-warning"></i> Due: ${new Date(file.data.dueDate).toLocaleDateString()}</div>`;
+    }
+
+    // Interactive Buttons
+    if(file.type === 'assignment') {
+        if(file.file_url) descHtml += `<div class="ml-11 mt-1"><a href="${file.file_url}" target="_blank" class="text-[10px] text-blue-600 hover:underline flex items-center gap-1"><i class="ph ph-file-arrow-down"></i> Brief</a></div>`;
+        
+        if (isAdmin()) {
+            actionHtml = `<button onclick="event.stopPropagation(); assignmentManager.openGrading(${file.id})" class="text-[10px] bg-indigo-50 text-indigo-700 px-2 py-1 rounded border border-indigo-100 hover:bg-indigo-100 font-bold">Grade</button>`;
+        } else {
+            const status = myWork[file.id] || 'Upload';
+            const btnColor = status === 'Submitted' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-blue-600 text-white border-blue-600 hover:bg-blue-700 shadow-sm';
+            actionHtml = `<button onclick="event.stopPropagation(); assignmentManager.openSubmit(${file.id})" class="text-[10px] px-3 py-1 rounded border ${btnColor} font-medium">${status}</button>`;
+        }
+    } else if (file.type === 'quiz') {
+        if (isAdmin()) {
+            actionHtml = `<span class="text-[10px] bg-gray-100 text-gray-500 px-2 py-1 rounded border">Quiz</span>`;
+        } else {
+            const status = myWork[file.id] ? 'Retake' : 'Start';
+            actionHtml = `<button onclick="event.stopPropagation(); quizManager.takeQuiz(${file.id})" class="text-[10px] px-3 py-1 rounded bg-purple-600 text-white hover:bg-purple-700 shadow-sm font-bold">${status}</button>`;
+        }
+    }
+    
+    // JSON Stringify for editing (Safe Quotes)
+    const safeFile = JSON.stringify(file).replace(/'/g, "&#39;").replace(/"/g, "&quot;");
+
+    return `
+    <div class="bg-white p-2 rounded border border-gray-100 hover:border-teal-500 hover:shadow-sm transition group mb-1">
+        <div class="flex items-center justify-between">
+            <div class="flex items-center gap-3 cursor-pointer flex-1" onclick="courseManager.launchContent(${file.id}, '${file.type}', '${file.file_url}')">
+                <div class="h-8 w-8 flex items-center justify-center text-xl grayscale group-hover:grayscale-0 transition-all bg-gray-50 rounded-full group-hover:bg-teal-50 text-teal-600">
+                    ${emoji}
+                </div>
+                <span class="font-medium text-sm text-gray-700 group-hover:text-teal-700 transition">
+                    ${file.title}
+                    ${!file.is_visible ? '<i class="ph ph-eye-slash text-red-400 text-xs ml-1"></i>' : ''}
+                </span>
+            </div>
+            <div class="flex items-center gap-2">
+                ${actionHtml}
+                ${isAdmin() ? `
+                    <div class="hidden group-hover:flex gap-1">
+                        <button onclick='contentModal.open(${unitId}, ${safeFile})' class="text-gray-400 hover:text-blue-500 p-1"><i class="ph ph-pencil-simple"></i></button>
+                        <button onclick="courseManager.deleteItem('content', ${file.id})" class="text-gray-400 hover:text-red-500 p-1"><i class="ph ph-trash"></i></button>
+                    </div>
+                ` : ''}
+            </div>
+        </div>
+        ${descHtml}
+    </div>`;
+}
+
+// ==========================================
+// 5. COURSE CONTENT MANAGER (Updated with Grouping)
+// ==========================================
 const courseManager = {
     loadSyllabus: async () => {
         const list = document.getElementById('syllabus-list');
         list.innerHTML = '<div class="p-4 text-center"><i class="ph ph-spinner animate-spin text-teal-600"></i></div>';
         
-        // Assign Colors to Modules for consistency
+        // Colors for Modules
         const palette = ['#dbeafe', '#d1fae5', '#fef9c3', '#fee2e2', '#f3e8ff', '#ffedd5'];
         
         let query = sb.from('sections').select('*, modules(*, units(*, content(*)))') 
             .eq('course_id', state.activeCourse.id).order('position', { ascending: true });
+        
+        // Students only see visible items
         if(!isAdmin()) query = query.eq('is_visible', true);
 
         const { data: sections } = await query;
@@ -417,12 +486,12 @@ const courseManager = {
 
         if (!sections || sections.length === 0) { list.innerHTML = '<div class="text-center text-gray-400 p-4 text-sm">No sections yet.</div>'; return; }
 
+        let modIdx = 0;
         sections.forEach(section => {
             let modules = (section.modules || []).sort((a,b) => a.position - b.position);
-            if(!isAdmin()) modules = modules.filter(m => m.is_visible);
-
-            // Safe strings for HTML attributes
-            const safeSecTitle = section.title.replace(/'/g, "\\'"); 
+            
+            // Assign colors
+            modules.forEach(m => { m.color = palette[modIdx % palette.length]; modIdx++; });
 
             const sectionEl = document.createElement('div');
             sectionEl.className = "border-b border-gray-100 last:border-0";
@@ -433,127 +502,32 @@ const courseManager = {
                         <i id="acc-icon-${section.id}" class="ph ph-caret-down transition-transform duration-200"></i>
                         <span class="truncate">${section.title}</span>
                     </div>
-                    <div class="flex items-center gap-2" onclick="event.stopPropagation()">
+                    <div class="flex items-center gap-1" onclick="event.stopPropagation()">
                         ${isAdmin() ? `
                             <button onclick="courseManager.bulkCreate('module', ${section.id})" class="text-teal-600 hover:bg-teal-50 p-1 rounded" title="Add Module"><i class="ph ph-plus"></i></button>
-                            <button onclick="entityModal.open('section', ${section.id}, '${safeSecTitle}')" class="text-blue-500 hover:bg-blue-50 p-1 rounded"><i class="ph ph-pencil-simple"></i></button>
+                            <button onclick="entityModal.open('section', ${section.id}, '${section.title.replace(/'/g,"")}')" class="text-blue-500 hover:bg-blue-50 p-1 rounded"><i class="ph ph-pencil-simple"></i></button>
                             <button onclick="courseManager.deleteItem('sections', ${section.id})" class="text-red-400 hover:bg-red-50 p-1 rounded"><i class="ph ph-trash"></i></button>
                         ` : ''}
                     </div>
                 </div>
                 <div id="acc-content-${section.id}" class="pl-4 pb-2 space-y-1 hidden">
-                    ${modules.map((mod, idx) => {
-                        const safeModTitle = mod.title.replace(/'/g, "\\'");
-                        const modColor = palette[idx % palette.length]; // Assign color based on index
-                        mod.color = modColor; // Save for scheduler
-                        return `
+                    ${modules.map(mod => `
                         <div class="p-2 rounded cursor-pointer text-sm text-gray-600 hover:bg-teal-50 hover:text-teal-700 flex justify-between items-center group transition" onclick="courseManager.openModule('${mod.id}')">
                             <div class="flex items-center gap-2 flex-1">
-                                <div class="w-2 h-2 rounded-full" style="background:${modColor}"></div>
-                                <i class="ph ph-folder-notch text-gray-400"></i>
+                                <div class="w-2 h-2 rounded-full" style="background:${mod.color}"></div>
                                 <span class="truncate">${mod.title}</span>
                             </div>
-                            <div class="flex items-center gap-3" onclick="event.stopPropagation()">
+                            <div class="flex items-center gap-1" onclick="event.stopPropagation()">
                                 ${isAdmin() ? `
-                                    <button onclick="entityModal.open('module', ${mod.id}, '${safeModTitle}')" class="text-blue-400 hover:text-blue-600"><i class="ph ph-pencil-simple"></i></button>
-                                    <button onclick="courseManager.deleteItem('modules', ${mod.id})" class="text-red-400 hover:text-red-600"><i class="ph ph-trash"></i></button>
+                                    <button onclick="entityModal.open('module', ${mod.id}, '${mod.title.replace(/'/g,"")}')" class="text-blue-400 hover:text-blue-600 hidden group-hover:block"><i class="ph ph-pencil-simple"></i></button>
+                                    <button onclick="courseManager.deleteItem('modules', ${mod.id})" class="text-red-400 hover:text-red-600 hidden group-hover:block"><i class="ph ph-trash"></i></button>
                                 ` : ''}
                             </div>
-                        </div>`;
-                    }).join('')}
+                        </div>`).join('')}
                 </div>
             `;
             list.appendChild(sectionEl);
         });
-    },
-
-    toggleVisibility: async (table, id, isVisible) => {
-        try { await sb.from(table).update({ is_visible: isVisible }).eq('id', id); ui.toast("Visibility updated", "success"); }
-        catch(e) { ui.toast("Error updating", "error"); }
-    },
-
-    updateHours: async (unitId, hours) => {
-        try {
-            await sb.from('units').update({ total_hours_required: hours }).eq('id', unitId);
-            state.structure.forEach(s => s.modules?.forEach(m => m.units?.forEach(u => { if(u.id == unitId) u.total_hours_required = parseFloat(hours); })));
-            if(!document.getElementById('tab-schedule').classList.contains('hidden')) schedulerManager.renderSidebar(); 
-        } catch (e) { ui.toast("Error updating hours", "error"); }
-    },
-
-    // BULK CREATE HELPER
-    bulkCreate: async (type, parentId) => {
-        const title = prompt(`Enter ${type} title:`);
-        if(!title) return;
-        
-        const payload = { title, is_visible: true };
-        if(type === 'section') payload.course_id = state.activeCourse.id;
-        else if(type === 'module') payload.section_id = parentId;
-        else if(type === 'unit') { payload.module_id = parentId; payload.total_hours_required = 0; }
-        
-        await sb.from(type + 's').insert([payload]);
-        document.querySelector('.fixed.inset-0').remove(); // Close modal
-        courseManager.openBulkEdit(); // Re-open to refresh
-    },
-    
-    updateEntity: async (table, id, field, value) => { await sb.from(table).update({ [field]: value }).eq('id', id); },
-
-    openBulkEdit: async () => {
-        const { data: sections } = await sb.from('sections').select('id, title, position, modules(id, title, position, units(id, title, total_hours_required, position))')
-            .eq('course_id', state.activeCourse.id).order('position', { ascending: true });
-
-        let rows = [];
-        sections?.forEach(sec => {
-            rows.push({ type: 'section', id: sec.id, title: sec.title, indent: 0 });
-            rows.push({ type: 'btn-module', parentId: sec.id, indent: 1 }); // Button to add Module
-
-            sec.modules?.sort((a,b)=>a.position-b.position).forEach(mod => {
-                rows.push({ type: 'module', id: mod.id, title: mod.title, indent: 1 });
-                rows.push({ type: 'btn-unit', parentId: mod.id, indent: 2 }); // Button to add Unit
-
-                mod.units?.sort((a,b)=>a.position-b.position).forEach(unit => {
-                    rows.push({ type: 'unit', id: unit.id, title: unit.title, hours: unit.total_hours_required, indent: 2 });
-                });
-            });
-        });
-        rows.push({ type: 'btn-section', indent: 0 });
-
-        const modal = document.createElement('div');
-        modal.className = "fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-8 fade-in";
-        modal.innerHTML = `
-            <div class="bg-white rounded-xl shadow-2xl w-full max-w-5xl h-[85vh] flex flex-col">
-                <div class="p-4 border-b flex justify-between items-center bg-gray-50 rounded-t-xl">
-                    <h3 class="font-bold text-lg">Bulk Edit: ${state.activeCourse.title}</h3>
-                    <button onclick="this.closest('.fixed').remove(); courseManager.loadSyllabus();" class="text-gray-500 hover:text-red-500"><i class="ph ph-x text-xl"></i></button>
-                </div>
-                <div class="flex-1 overflow-y-auto p-0">
-                    <table class="w-full text-sm text-left">
-                        <thead class="bg-gray-100 text-gray-600 sticky top-0 z-10 shadow-sm">
-                            <tr><th class="p-3 w-24 pl-6">Type</th><th class="p-3">Title</th><th class="p-3 w-32">Hours</th></tr>
-                        </thead>
-                        <tbody class="divide-y divide-gray-100">
-                            ${rows.map(row => {
-                                if(row.type.startsWith('btn-')) {
-                                    const itemType = row.type.replace('btn-', '');
-                                    return `<tr class="bg-slate-50 hover:bg-slate-100"><td></td><td class="p-2"><button onclick="courseManager.bulkCreate('${itemType}', ${row.parentId || 0})" style="margin-left: ${row.indent * 1.5}rem" class="text-xs text-teal-600 hover:text-teal-800 font-bold flex items-center gap-1 px-2 py-1 rounded hover:bg-teal-50 border border-transparent hover:border-teal-200 transition"><i class="ph ph-plus-circle"></i> Add ${itemType.charAt(0).toUpperCase() + itemType.slice(1)}</button></td><td></td></tr>`;
-                                }
-                                const isUnit = row.type === 'unit';
-                                const typeLabel = row.type.charAt(0).toUpperCase() + row.type.slice(1);
-                                const typeColor = row.type === 'section' ? 'bg-gray-200 text-gray-800' : (row.type === 'module' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800');
-                                const table = row.type + 's'; 
-                                return `<tr class="${row.type === 'section' ? 'bg-gray-50' : 'bg-white'} hover:bg-slate-50 transition border-b border-gray-100">
-                                    <td class="p-2 pl-4 align-middle"><span class="text-[10px] font-bold ${typeColor} px-2 py-1 rounded uppercase tracking-wider">${typeLabel}</span></td>
-                                    <td class="p-2"><div style="padding-left: ${row.indent * 1.5}rem" class="relative flex items-center">${row.indent > 0 ? `<div class="absolute left-0 top-1/2 -translate-y-1/2 w-[${row.indent * 1.5}rem] h-px bg-gray-300"></div>` : ''}<input type="text" class="w-full bg-transparent border-b border-transparent hover:border-gray-300 focus:border-teal-500 focus:outline-none py-1 px-2 font-medium text-gray-700" value="${row.title}" onchange="courseManager.updateEntity('${table}', ${row.id}, 'title', this.value)"></div></td>
-                                    <td class="p-2">${isUnit ? `<div class="flex items-center gap-1"><input type="number" step="0.5" class="border p-1 rounded w-20 text-center bg-white focus:ring-2 focus:ring-teal-500 outline-none" value="${row.hours || 0}" onchange="courseManager.updateEntity('units', ${row.id}, 'total_hours_required', this.value)"><span class="text-xs text-gray-400">h</span></div>` : ''}</td>
-                                </tr>`;
-                            }).join('')}
-                        </tbody>
-                    </table>
-                </div>
-                <div class="p-4 border-t bg-gray-50 flex justify-end">
-                    <button onclick="this.closest('.fixed').remove(); courseManager.loadSyllabus();" class="bg-teal-600 text-white px-6 py-2 rounded shadow hover:bg-teal-700 font-bold">Done & Refresh</button>
-                </div>
-            </div>`;
-        document.body.appendChild(modal);
     },
 
     openModule: async (moduleId) => {
@@ -561,27 +535,14 @@ const courseManager = {
         state.activeModule = module;
         
         document.getElementById('current-module-title').innerHTML = `<span class="flex items-center gap-2 text-teal-900 font-bold"><i class="ph ph-folder-open"></i> ${module.title}</span>`;
-        if(isAdmin()) {
-            document.getElementById('btn-add-unit').classList.remove('hidden');
-            const headerContainer = document.getElementById('current-module-title').parentElement;
-            if(!document.getElementById('btn-bulk-edit')) {
-                const bulkBtn = document.createElement('button');
-                bulkBtn.id = 'btn-bulk-edit';
-                bulkBtn.className = "text-xs bg-indigo-50 text-indigo-700 px-3 py-1 rounded border border-indigo-200 mr-2 hover:bg-indigo-100 font-bold flex items-center gap-1";
-                bulkBtn.innerHTML = `<i class="ph ph-list-dashes"></i> Bulk Edit`;
-                bulkBtn.onclick = () => courseManager.openBulkEdit();
-                const addBtn = document.getElementById('btn-add-unit');
-                headerContainer.insertBefore(bulkBtn, addBtn);
-            }
-        }
+        if(isAdmin()) document.getElementById('btn-add-unit').classList.remove('hidden');
 
         const container = document.getElementById('unit-container');
         container.innerHTML = '<div class="text-gray-400 p-8 flex justify-center"><i class="ph ph-spinner animate-spin text-2xl"></i></div>';
         
-        let query = sb.from('units').select('*, content(*)').eq('module_id', moduleId).order('position', { ascending: true });
-        if(!isAdmin()) query = query.eq('is_visible', true); 
-        const { data: units } = await query;
+        const { data: units } = await sb.from('units').select('*, content(*)').eq('module_id', moduleId).order('position', { ascending: true });
         
+        // Fetch student work status
         let myWork = {};
         if(!isAdmin()) {
             const { data: subs } = await sb.from('assignments').select('content_id').eq('student_id', state.user.id);
@@ -600,48 +561,61 @@ const courseManager = {
             unitEl.innerHTML = `
                 <div class="flex justify-between items-center p-4 bg-white cursor-pointer hover:bg-gray-50 border-b border-gray-100" onclick="ui.toggleAccordion('unit-${unit.id}')">
                     <div class="flex items-center gap-2 flex-1"><i id="acc-icon-unit-${unit.id}" class="ph ph-caret-down text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}"></i><h3 class="font-bold text-slate-700 text-lg">${unit.title}</h3></div>
-                    <div class="flex items-center gap-3" onclick="event.stopPropagation()">
-                        ${isAdmin() ? `<div class="flex items-center gap-1 bg-gray-50 px-2 py-1 rounded border border-gray-200" title="Total Hours Required"><i class="ph ph-clock text-gray-400 text-xs"></i><input type="number" step="0.5" class="w-12 text-xs bg-transparent outline-none font-bold text-gray-600 text-right" value="${unit.total_hours_required || 0}" onchange="courseManager.updateHours(${unit.id}, this.value)"><span class="text-[10px] text-gray-400">h</span></div><label class="relative inline-flex items-center cursor-pointer mr-2"><input type="checkbox" class="sr-only peer" ${unit.is_visible ? 'checked' : ''} onchange="courseManager.toggleVisibility('units', ${unit.id}, this.checked)"><div class="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:bg-teal-600 peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all"></div></label><div class="flex gap-1 border-l pl-2 border-gray-200"><button onclick="courseManager.moveItem('units', ${unit.id}, 'up')" class="text-gray-400 hover:text-teal-600 p-1"><i class="ph ph-arrow-up"></i></button><button onclick="courseManager.moveItem('units', ${unit.id}, 'down')" class="text-gray-400 hover:text-teal-600 p-1"><i class="ph ph-arrow-down"></i></button><button onclick="courseManager.addContent(${unit.id})" class="text-xs bg-teal-50 text-teal-700 px-3 py-1 rounded hover:bg-teal-100 border border-teal-200 font-medium">+ Content</button><button onclick="courseManager.editItem('units', ${unit.id}, '${unit.title}')" class="text-gray-400 hover:text-blue-500 p-1"><i class="ph ph-pencil-simple text-lg"></i></button><button onclick="courseManager.deleteItem('units', ${unit.id})" class="text-gray-400 hover:text-red-500 p-1"><i class="ph ph-trash text-lg"></i></button></div>` : ''}
+                    <div class="flex items-center gap-2" onclick="event.stopPropagation()">
+                        ${isAdmin() ? `<div class="flex gap-1 border-l pl-2 border-gray-200"><button onclick="courseManager.moveItem('units', ${unit.id}, 'up')" class="text-gray-400 hover:text-teal-600 p-1"><i class="ph ph-arrow-up"></i></button><button onclick="courseManager.moveItem('units', ${unit.id}, 'down')" class="text-gray-400 hover:text-teal-600 p-1"><i class="ph ph-arrow-down"></i></button><button onclick="courseManager.addContent(${unit.id})" class="text-xs bg-teal-50 text-teal-700 px-3 py-1 rounded hover:bg-teal-100 border border-teal-200 font-medium">+ Content</button><button onclick="courseManager.editItem('units', ${unit.id}, '${unit.title}')" class="text-gray-400 hover:text-blue-500 p-1"><i class="ph ph-pencil-simple text-lg"></i></button><button onclick="courseManager.deleteItem('units', ${unit.id})" class="text-gray-400 hover:text-red-500 p-1"><i class="ph ph-trash text-lg"></i></button></div>` : ''}
                     </div>
                 </div>
                 <div id="acc-content-unit-${unit.id}" class="${isOpen ? '' : 'hidden'} bg-slate-50 p-4 space-y-3"></div>
             `;
             
             const contentContainer = unitEl.querySelector(`#acc-content-unit-${unit.id}`);
-            if(unit.content && !isAdmin()) unit.content = unit.content.filter(c => c.is_visible);
+            if(unit.content && !isAdmin()) unit.content = unit.content.filter(c => c.is_visible); // Filter for students
 
             if(unit.content && unit.content.length > 0) {
                 unit.content.sort((a,b) => a.position - b.position);
+                
+                // --- GROUPING LOGIC (The "Better" Part) ---
                 const groups = { video: [], file: [], audio: [], simulator: [], assignment: [], quiz: [], url: [] };
+                // Group items. Default to 'file' if unknown
                 unit.content.forEach(item => { if(groups[item.type]) groups[item.type].push(item); else groups['file'].push(item); });
 
                 Object.keys(groups).forEach(type => {
-    if(groups[type].length === 0) return;
-    
-    // Capitalize the first letter and keep it singular (e.g., "Video", "Quiz")
-    const groupTitle = type.charAt(0).toUpperCase() + type.slice(1);
-    const groupIcon = getContentEmoji(type); 
+                    if(groups[type].length === 0) return;
+                    
+                    const groupTitle = type.charAt(0).toUpperCase() + type.slice(1);
+                    const groupIcon = getContentEmoji(type); 
 
-    contentContainer.innerHTML += `
-        <details class="group/nested bg-white border border-gray-200 rounded-lg overflow-hidden mb-2">
-            <summary class="flex justify-between items-center p-3 bg-gray-50 cursor-pointer hover:bg-gray-100 list-none">
-                <span class="font-bold text-sm text-gray-700 flex items-center gap-2">
-                    ${groupIcon} ${groupTitle} 
-                    <span class="bg-gray-200 text-gray-600 text-[10px] px-2 py-0.5 rounded-full">${groups[type].length}</span>
-                </span>
-                <i class="ph ph-caret-down text-gray-400 transition-transform group-open/nested:rotate-180"></i>
-            </summary>
-            <div class="p-3 space-y-2 border-t border-gray-100">
-                ${groups[type].map(file => renderContentItem(file, unit.id, myWork)).join('')}
-            </div>
-        </details>`;
-});
+                    contentContainer.innerHTML += `
+                        <details class="group/nested bg-white border border-gray-200 rounded-lg overflow-hidden mb-2" open>
+                            <summary class="flex justify-between items-center p-3 bg-gray-50 cursor-pointer hover:bg-gray-100 list-none text-xs font-bold text-gray-500 uppercase tracking-wider">
+                                <span class="flex items-center gap-2">${groupIcon} ${groupTitle}s</span>
+                                <i class="ph ph-caret-down text-gray-400 transition-transform group-open/nested:rotate-180"></i>
+                            </summary>
+                            <div class="p-2 space-y-1 border-t border-gray-100">
+                                ${groups[type].map(file => renderContentItem(file, unit.id, myWork)).join('')}
+                            </div>
+                        </details>`;
+                });
             } else { contentContainer.innerHTML = '<p class="text-sm text-gray-400 italic pl-2">No content yet.</p>'; }
             container.appendChild(unitEl);
         });
     },
 
-    moveItem: async (table, id, direction) => { /* Same as before */ 
+    // Simplified Bulk Create (Prompt based)
+    bulkCreate: async (type, parentId) => {
+        const t = prompt(`Enter ${type} title:`);
+        if(!t) return;
+        
+        const payload = { title: t, is_visible: true };
+        if(type === 'section') payload.course_id = state.activeCourse.id;
+        else if(type === 'module') payload.section_id = parentId;
+        
+        await sb.from(type + 's').insert([payload]);
+        courseManager.loadSyllabus();
+    },
+
+    // --- UTILITIES (Move/Edit/Delete/Launch) ---
+    moveItem: async (table, id, direction) => {
         let query = sb.from(table).select('id, position');
         if (table === 'sections') query = query.eq('course_id', state.activeCourse.id);
         else if (table === 'modules') {
@@ -664,40 +638,46 @@ const courseManager = {
         for(const item of sorted) await sb.from(table).update({ position: item.position }).eq('id', item.id);
         if (table === 'units' || table === 'content') courseManager.openModule(state.activeModule.id); else courseManager.loadSyllabus();
     },
-    editItem: async (table, id, currentTitle) => {
-    // We removed the prompt line entirely. 
-    // If you want clicking 'Edit' to simply refresh the view, keep this:
-    if(table === 'sections' || table === 'modules') {
-        courseManager.loadSyllabus(); 
-    } else {
-        courseManager.openModule(state.activeModule.id);
-    }
-},
-    
-    launchContent: async (id, type, url) => {
-        // YOUTUBE FIX
-        if (url && (url.includes('youtube.com') || url.includes('youtu.be'))) { window.open(url, '_blank'); return; }
 
+    editItem: async (table, id, currentTitle) => {
+        const t = prompt(`Rename ${table}:`, currentTitle);
+        if(!t) return;
+        await sb.from(table).update({ title: t }).eq('id', id);
+        if(table === 'sections' || table === 'modules') courseManager.loadSyllabus(); else courseManager.openModule(state.activeModule.id);
+    },
+
+    deleteItem: async (table, id) => { 
+        if(confirm("Delete this item?")) { 
+            await sb.from(table).delete().eq('id', id); 
+            if(table==='units'||table==='content') courseManager.openModule(state.activeModule.id); 
+            else courseManager.loadSyllabus(); 
+        } 
+    },
+
+    addContent: (unitId) => contentModal.open(unitId),
+    addUnit: async () => { if(!state.activeModule) return; const t = prompt("Unit Title:"); if(t) { await sb.from('units').insert([{ module_id: state.activeModule.id, title: t }]); courseManager.openModule(state.activeModule.id); }},
+
+    // Keep the new robust Launcher & Viewer
+    launchContent: async (id, type, url) => {
         const { data: content } = await sb.from('content').select('allow_download').eq('id', id).single();
+        const allowDl = content ? content.allow_download : false;
         sb.from('activity_logs').insert([{ user_id: state.user.id, content_id: id, action_type: 'viewed' }]).then(()=>{});
-        const canDownload = isAdmin() || (content && content.allow_download);
+        
+        const canDownload = isAdmin() || allowDl; 
 
         if(type === 'simulator') {
-            // FIX: Ensure clean URL and proper parameters
-            const baseUrl = url.split('?')[0]; 
-            // If the user entered just "simulator", append "/index.html"
-            const cleanUrl = baseUrl.endsWith('/') ? baseUrl + 'index.html' : (baseUrl.endsWith('html') ? baseUrl : baseUrl + '/index.html');
-            
+            const cleanUrl = url.split('?')[0]; 
             window.open(`${cleanUrl}?auth=msletb_secure_launch&uid=${state.user.id}&cid=${id}`, '_blank');
         }
         else if (type === 'audio') { 
-            const p = document.getElementById('audio-player'); p.src = url; document.getElementById('modal-audio').classList.remove('hidden');
-            if(!canDownload) p.setAttribute('controlsList', 'nodownload'); else p.removeAttribute('controlsList');
+            const m = document.getElementById('modal-audio');
+            const p = document.getElementById('audio-player');
+            if(m && p) { p.src = url; m.classList.remove('hidden'); if(!canDownload) p.setAttribute('controlsList', 'nodownload'); else p.removeAttribute('controlsList'); }
         }
-        else if (type === 'file' || type === 'video') courseManager.openViewer(url, type, canDownload);
-        else if (type === 'assignment') isAdmin() ? assignmentManager.openGrading(id) : assignmentManager.openSubmit(id);
-        else if (type === 'quiz') isAdmin() ? alert("Admins cannot take quizzes.") : quizManager.takeQuiz(id);
-        else if (url) window.open(url, '_blank');
+        else if (type === 'file' || type === 'video') { courseManager.openViewer(url, type, canDownload); }
+        else if (type === 'assignment') { isAdmin() ? assignmentManager.openGrading(id) : assignmentManager.openSubmit(id); }
+        else if (type === 'quiz') { isAdmin() ? alert("Admins cannot take quizzes.") : quizManager.takeQuiz(id); }
+        else if (url) { window.open(url, '_blank'); }
     },
 
     openViewer: (url, type, canDownload) => {
@@ -705,125 +685,27 @@ const courseManager = {
         const body = document.getElementById('viewer-body');
         const dlBtn = document.getElementById('viewer-download-btn');
         modal.classList.remove('hidden');
-        if(dlBtn) { if (canDownload) { dlBtn.classList.remove('hidden'); dlBtn.href = url; } else { dlBtn.classList.add('hidden'); dlBtn.href = '#'; } }
+        if(dlBtn) { dlBtn.classList.toggle('hidden', !canDownload); dlBtn.href = canDownload ? url : '#'; }
+        
         body.innerHTML = '<div class="text-white flex items-center justify-center h-full"><i class="ph ph-spinner animate-spin text-4xl"></i></div>'; 
         const ext = url.split('?')[0].split('.').pop().toLowerCase();
         
-        if (type === 'video' || ['mp4', 'webm'].includes(ext)) {
-            body.innerHTML = `<video src="${url}" controls class="max-h-full max-w-full shadow-lg rounded"></video>`;
-        } else if (['pdf', 'jpg', 'png'].includes(ext)) {
-            body.innerHTML = `<iframe src="${url}" class="w-full h-full border-0 bg-white"></iframe>`;
-        } else {
-            body.innerHTML = `<div class="text-white p-8">File type not supported for preview. <a href="${url}" target="_blank" class="underline">Download</a></div>`;
+        if (url.includes('youtube') || url.includes('youtu.be')) {
+            let videoId = url.split('v=')[1]?.split('&')[0] || url.split('youtu.be/')[1]?.split('?')[0];
+            if(videoId) body.innerHTML = `<iframe src="https://www.youtube.com/embed/${videoId}" class="w-full h-full border-0" allowfullscreen></iframe>`;
+        }
+        else if (type === 'video' || ['mp4', 'webm'].includes(ext)) {
+            body.innerHTML = `<video src="${url}" ${canDownload?'controls':'controls controlsList="nodownload"'} class="max-h-full max-w-full shadow-lg rounded"></video>`;
+        } 
+        else if (['pdf', 'jpg', 'png'].includes(ext)) {
+            body.innerHTML = `<iframe src="${url}#toolbar=0" class="w-full h-full border-0 bg-white"></iframe>`;
+        } 
+        else {
+            body.innerHTML = `<div class="text-white text-center p-8"><p class="text-xl">Preview not available.</p>${canDownload ? `<a href="${url}" target="_blank" class="text-teal-400 underline">Download</a>` : ''}</div>`;
         }
     },
-    closeViewer: () => { document.getElementById('modal-viewer').classList.add('hidden'); document.getElementById('viewer-body').innerHTML = ''; },
-    closeAudio: () => { const m = document.getElementById('modal-audio'); const p = document.getElementById('audio-player'); if(p){p.pause(); p.currentTime=0;} if(m) m.classList.add('hidden'); },
-    addUnit: async () => { if(!state.activeModule) return; const t = prompt("Unit Title:"); if(t) { await sb.from('units').insert([{ module_id: state.activeModule.id, title: t }]); courseManager.openModule(state.activeModule.id); }},
-    addContent: (unitId) => contentModal.open(unitId),
-    deleteItem: async (table, id) => { if(confirm("Delete?")) { await sb.from(table).delete().eq('id', id); if(table==='units'||table==='content') courseManager.openModule(state.activeModule.id); else courseManager.loadSyllabus(); } },
-    loadTeam: async () => { 
-        const el = document.getElementById('tab-team'); el.innerHTML = '<p>Loading...</p>';
-        const { data: roster } = await sb.from('enrollments').select('*, profiles(email)').eq('course_id', state.activeCourse.id);
-        const { data: invites } = await sb.from('invitations').select('*').eq('course_id', state.activeCourse.id);
-        let html = `<div class="flex justify-between mb-6"><h2 class="text-xl font-bold">Class Roster</h2><div class="flex gap-2"><select id="role-in" class="border p-2 rounded text-sm"><option value="student">Student</option><option value="instructor">Instructor</option></select><input id="email-in" placeholder="Email Address" class="border p-2 rounded text-sm w-64"><button onclick="courseManager.enroll()" class="bg-teal-600 text-white px-4 py-2 rounded text-sm font-bold shadow-sm">+ Invite</button></div></div><div class="bg-white rounded-lg border border-gray-200 overflow-hidden"><table class="w-full text-sm text-left"><thead class="bg-gray-50 text-gray-500 uppercase font-semibold"><tr><th class="p-4">Email</th><th class="p-4">Role</th><th class="p-4">Status</th><th class="p-4"></th></tr></thead><tbody class="divide-y divide-gray-100">`;
-        invites?.forEach(i => html += `<tr class="bg-yellow-50"><td class="p-4">${i.email}</td><td class="p-4 uppercase text-xs font-bold">${i.role}</td><td class="p-4"><span class="bg-yellow-100 text-yellow-700 px-2 py-1 rounded text-xs font-bold">Invited</span></td><td class="p-4"><button onclick="courseManager.delInvite(${i.id})" class="text-red-400 hover:text-red-600"><i class="ph ph-x text-lg"></i></button></td></tr>`);
-        roster?.forEach(m => html += `<tr><td class="p-4 font-medium text-gray-800">${m.profiles?.email || 'Unknown'}</td><td class="p-4"><span class="px-2 py-1 rounded text-xs font-bold ${m.course_role==='instructor'?'bg-purple-100 text-purple-700':'bg-blue-100 text-blue-700'}">${m.course_role.toUpperCase()}</span></td><td class="p-4"><span class="bg-green-100 text-green-700 px-2 py-1 rounded text-xs font-bold">Active</span></td><td class="p-4 text-right">${isAdmin() && m.user_id !== state.user.id ? `<button onclick="courseManager.delUser('${m.user_id}')" class="text-red-400 hover:text-red-600"><i class="ph ph-trash text-lg"></i></button>` : ''}</td></tr>`);
-        html += `</tbody></table></div>`; el.innerHTML = html;
-    },
-    
-    // UPDATED ENROLL LOGIC (WITH ERROR HANDLING)
-    enroll: async () => {
-        const email = document.getElementById('email-in').value; 
-        const role = document.getElementById('role-in').value;
-        if(!email) return alert("Please enter an email address");
-
-        // Check if user exists
-        const { data: u, error: uError } = await sb.from('profiles').select('id').eq('email', email).maybeSingle();
-        
-        if (uError) {
-            console.error("Profile check error:", uError);
-            ui.toast("Error checking user: " + uError.message, "error");
-            return;
-        }
-
-        if(u) { 
-            // User exists, add to enrollments
-            const { error } = await sb.from('enrollments').insert([{course_id:state.activeCourse.id, user_id:u.id, course_role:role}]); 
-            if(error) {
-                console.error("Enrollment error:", error);
-                ui.toast("Failed to enroll: " + error.message, "error");
-            } else {
-                ui.toast("Enrolled successfully!", "success"); 
-            }
-        } else { 
-            // User doesn't exist, add to invitations
-            const { error } = await sb.from('invitations').insert([{course_id:state.activeCourse.id, email, role, invited_by:state.user.id}]); 
-            if(error) {
-                console.error("Invite error:", error);
-                ui.toast("Failed to invite: " + error.message, "error");
-            } else {
-                ui.toast("Invitation sent!", "success"); 
-            }
-        }
-        courseManager.loadTeam();
-    },
-    delInvite: async (id) => { if(confirm("Cancel?")) { await sb.from('invitations').delete().eq('id', id); courseManager.loadTeam(); }},
-    delUser: async (uid) => { if(confirm("Remove?")) { await sb.from('enrollments').delete().eq('course_id', state.activeCourse.id).eq('user_id', uid); courseManager.loadTeam(); }},
-    
-    // Reports Logic
-    loadReports: async () => {
-        const el = document.getElementById('tab-reports');
-        el.innerHTML = '<div class="flex justify-center p-8"><i class="ph ph-spinner animate-spin text-3xl text-teal-600"></i></div>';
-        const { data: sections } = await sb.from('sections').select('id, title, modules(id, title, units(id, title, content(id, title, type)))').eq('course_id', state.activeCourse.id).order('position');
-        let gradableItems = [];
-        sections?.forEach(s => s.modules?.forEach(m => m.units?.forEach(u => u.content?.forEach(c => { if(['assignment', 'quiz', 'simulator'].includes(c.type)) gradableItems.push({ id: c.id, title: c.title, type: c.type, context: `${m.title} <br> <span class="text-gray-400 font-normal text-[10px] uppercase tracking-wide">${u.title}</span>` }); }))));
-
-        if (isAdmin()) {
-            const { data: roster } = await sb.from('enrollments').select('user_id, profiles(email)').eq('course_id', state.activeCourse.id).eq('course_role', 'student');
-            if (!roster || roster.length === 0) { el.innerHTML = '<p class="text-gray-500 p-6">No students enrolled yet.</p>'; return; }
-            const itemIds = gradableItems.map(i => i.id);
-            const { data: allAssigns } = await sb.from('assignments').select('*').in('content_id', itemIds);
-            const { data: allQuizzes } = await sb.from('quiz_results').select('*').in('content_id', itemIds).order('submitted_at', { ascending: true });
-            const gradebook = {};
-            roster.forEach(s => gradebook[s.user_id] = { email: s.profiles.email, data: {} });
-            allAssigns?.forEach(a => { if(gradebook[a.student_id]) gradebook[a.student_id].data[a.content_id] = { type: 'assignment', grade: a.grade || 'Submitted' }; });
-            allQuizzes?.forEach(q => { if(gradebook[q.user_id]) { if(!gradebook[q.user_id].data[q.content_id]) gradebook[q.user_id].data[q.content_id] = { type: 'quiz', history: [], best: null }; const info = getGradeInfo(q.score, q.total); gradebook[q.user_id].data[q.content_id].history.push(info.pct); if(!gradebook[q.user_id].data[q.content_id].best || info.pct > gradebook[q.user_id].data[q.content_id].best.pct) gradebook[q.user_id].data[q.content_id].best = info; } });
-
-            let tableHtml = `<div class="flex justify-between items-center mb-4"><h2 class="text-xl font-bold text-gray-800">Class Gradebook</h2><button onclick="courseManager.loadReports()" class="text-sm text-teal-600 hover:underline"><i class="ph ph-arrow-clockwise"></i> Refresh</button></div><div class="overflow-x-auto bg-white rounded-lg shadow border border-gray-200"><table class="w-full text-sm text-left whitespace-nowrap"><thead class="bg-gray-50 text-gray-600 font-bold border-b border-gray-200"><tr><th class="p-4 sticky left-0 bg-gray-50 z-10 border-r">Student</th>${gradableItems.map(i => `<th class="p-4 min-w-[180px] border-r border-gray-100"><div class="text-xs font-bold text-teal-700 mb-1">${i.context}</div><div class="flex items-center gap-1 font-normal text-gray-500">${getContentEmoji(i.type)} ${i.title}</div></th>`).join('')}</tr></thead><tbody class="divide-y divide-gray-100">`;
-            roster.forEach(student => {
-                const row = gradebook[student.user_id];
-                tableHtml += `<tr class="hover:bg-gray-50"><td class="p-4 font-medium text-gray-900 sticky left-0 bg-white border-r border-gray-200 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">${row.email}</td>`;
-                gradableItems.forEach(item => {
-                    const entry = row.data[item.id];
-                    let cellHtml = '<span class="text-gray-300 text-xs italic">Not started</span>';
-                    if (entry) {
-                        if (entry.type === 'quiz') { cellHtml = `<div class="flex flex-col gap-1"><span class="${entry.best.color} px-2 py-0.5 rounded text-xs font-bold">${entry.best.pct}% (${entry.best.label})</span><div class="text-[10px] text-gray-400">Attempts: ${entry.history.length}</div></div>`; } 
-                        else { cellHtml = `<span class="${entry.grade === 'Pass' ? 'text-green-600 bg-green-50' : (entry.grade==='Fail'?'text-red-600 bg-red-50':'text-yellow-600 bg-yellow-50')} px-2 py-1 rounded font-bold text-xs">${entry.grade}</span>`; }
-                    }
-                    tableHtml += `<td class="p-3 border-r border-gray-50 align-top">${cellHtml}</td>`;
-                });
-                tableHtml += `</tr>`;
-            });
-            tableHtml += `</tbody></table></div>`; el.innerHTML = tableHtml; return;
-        }
-
-        const { data: assigns } = await sb.from('assignments').select('*').eq('student_id', state.user.id);
-        const { data: quizzes } = await sb.from('quiz_results').select('*').eq('user_id', state.user.id).order('submitted_at', { ascending: true });
-        const lookup = {}; assigns?.forEach(a => lookup[a.content_id] = { ...a, type: 'assignment' });
-        const quizLookup = {}; quizzes?.forEach(q => { if(!quizLookup[q.content_id]) quizLookup[q.content_id] = { history: [], best: null }; const info = getGradeInfo(q.score, q.total); quizLookup[q.content_id].history.push({ ...info, date: new Date(q.submitted_at).toLocaleDateString() }); if(!quizLookup[q.content_id].best || info.pct > quizLookup[q.content_id].best.pct) quizLookup[q.content_id].best = info; });
-
-        let done = 0; gradableItems.forEach(i => { if (lookup[i.id] || (quizLookup[i.id] && quizLookup[i.id].history.length > 0)) done++; });
-        const progress = gradableItems.length === 0 ? 0 : Math.round((done/gradableItems.length)*100);
-
-        let html = `<div class="bg-white p-6 rounded-lg shadow border border-gray-200 mb-6"><div class="flex justify-between items-end mb-2"><h2 class="text-lg font-bold text-gray-700">Your Course Progress</h2><span class="text-2xl font-bold text-teal-600">${progress}%</span></div><div class="w-full bg-gray-200 rounded-full h-3"><div class="bg-teal-500 h-3 rounded-full transition-all" style="width: ${progress}%"></div></div></div><div class="space-y-4">`;
-        sections?.forEach((sec, idx) => {
-            let hasGradable = false; let sectionHtml = `<div class="p-4 border-t border-gray-100 space-y-4">`;
-            sec.modules?.forEach(mod => { mod.units?.forEach(unit => { const graded = unit.content?.filter(c => ['assignment','quiz','simulator'].includes(c.type)) || []; if(graded.length > 0) { hasGradable = true; sectionHtml += `<div class="mb-2"><h5 class="text-xs font-bold text-gray-400 uppercase mb-2">${unit.title}</h5><div class="space-y-3">`; graded.forEach(item => { if(item.type === 'quiz') { const qData = quizLookup[item.id]; if(qData) { sectionHtml += `<div class="bg-white border border-gray-200 p-4 rounded-lg shadow-sm"><div class="flex justify-between items-start"><div><span class="font-bold text-gray-800">${item.title}</span><div class="text-xs text-gray-500 mt-1">Attempts: ${qData.history.length}</div></div><span class="${qData.best.color} px-3 py-1 rounded font-bold text-sm">${qData.best.pct}% (${qData.best.label})</span></div></div>`; } else { sectionHtml += `<div class="bg-white border border-gray-200 p-3 rounded flex justify-between items-center opacity-75"><span class="text-sm text-gray-600">${item.title}</span><span class="text-xs bg-gray-100 text-gray-500 px-2 py-1 rounded">Not Taken</span></div>`; } } else { const data = lookup[item.id]; const status = data ? (data.grade || 'Submitted') : 'Not Started'; const style = data ? (data.grade === 'Pass' ? 'bg-green-100 text-green-800' : (data.grade==='Fail'?'bg-red-100 text-red-800':'bg-yellow-100 text-yellow-800')) : 'bg-gray-100 text-gray-500'; sectionHtml += `<div class="bg-white border border-gray-200 p-3 rounded flex justify-between items-center"><span class="text-sm font-medium text-gray-700">${item.title}</span><span class="${style} px-2 py-1 rounded text-xs font-bold">${status}</span></div>`; } }); sectionHtml += `</div></div>`; } }); }); sectionHtml += `</div>`;
-            if(hasGradable) html += `<details ${idx===0 ? 'open' : ''} class="group bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden"><summary class="flex justify-between items-center p-4 cursor-pointer bg-gray-50 hover:bg-gray-100 list-none"><h3 class="font-bold text-slate-800 flex items-center gap-2"><i class="ph ph-caret-right transition-transform group-open:rotate-90"></i> ${sec.title}</h3></summary>${sectionHtml}</details>`;
-        });
-        html += `</div>`; el.innerHTML = html;
-    }
+    closeViewer: () => { document.getElementById('modal-viewer').classList.add('hidden'); document.getElementById('viewer-body').innerHTML=''; },
+    closeAudio: () => { const m = document.getElementById('modal-audio'); if(m) m.classList.add('hidden'); document.getElementById('audio-player')?.pause(); }
 };
 
 // ==========================================
@@ -1030,29 +912,246 @@ const assignmentManager = {
     grade: async (id, val) => { await sb.from('assignments').update({ grade: val }).eq('id', id); ui.toast("Graded!"); }
 };
 
+// ==========================================
+// 7. QUIZ MANAGER (Enhanced with Image Upload)
+// ==========================================
 const quizManager = {
-    questions: [],
-    addQuestionUI: () => {
-        const q = prompt("Question:"); if(!q) return;
-        const a = prompt("Option 1 (Correct):"); const b = prompt("Option 2:"); const c = prompt("Option 3:");
-        quizManager.questions.push({ q, options: [a,b,c], correct: 0 });
-        document.getElementById('quiz-questions-list').innerHTML += `<div>${q}</div>`;
+    // UI: Add Question Card
+    addQuestionUI: (data = null) => {
+        const div = document.createElement('div');
+        div.className = "question-card-ui border p-4 rounded-lg bg-slate-50 mb-4 shadow-sm relative group border-l-4 border-l-teal-500";
+        const unique = Date.now() + Math.random().toString(16).slice(2);
+        
+        div.innerHTML = `
+            <div class="mb-4 space-y-2">
+                <label class="block text-xs font-bold text-gray-500 uppercase tracking-wide">Question Text</label>
+                <input placeholder="Type your question here..." class="w-full border border-gray-300 p-2.5 rounded text-sm q-text focus:ring-2 focus:ring-teal-500 outline-none shadow-sm" 
+                    value="${data ? (data.text || data.question).replace(/"/g, '&quot;') : ''}"
+                    onpaste="quizManager.handleImagePaste(event, this)">
+                
+                <label class="block text-xs font-bold text-gray-500 uppercase tracking-wide mt-2">Question Image (Optional)</label>
+                <div class="flex items-center gap-2">
+                    <div class="flex-1 relative">
+                        <i class="ph ph-link absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
+                        <input placeholder="Image URL or Paste Screenshot (Ctrl+V)" 
+                            class="w-full border border-gray-300 p-2 pl-9 rounded text-xs bg-white q-image text-gray-600 focus:ring-2 focus:ring-teal-500 outline-none" 
+                            value="${data && data.image ? data.image : ''}"
+                            onpaste="quizManager.handleImagePaste(event, this)">
+                    </div>
+                    <label class="cursor-pointer bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 px-3 py-2 rounded text-xs font-bold flex items-center gap-2 transition shadow-sm">
+                        <i class="ph ph-upload-simple text-teal-600 text-lg"></i> Upload
+                        <input type="file" accept="image/*" class="hidden" onchange="quizManager.uploadQuestionImage(this)">
+                    </label>
+                </div>
+            </div>
+
+            <label class="block text-xs font-bold text-gray-500 uppercase mb-2">Answers (Select the correct one)</label>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                ${[0,1,2,3].map(i => `
+                    <div class="flex items-center bg-white border border-gray-200 rounded p-2 focus-within:border-teal-500 focus-within:ring-1 focus-within:ring-teal-500 transition shadow-sm">
+                        <input type="radio" name="correct-${unique}" value="${i}" class="mx-2 w-4 h-4 text-teal-600 focus:ring-teal-500 cursor-pointer" ${data && parseInt(data.correct) === i ? 'checked' : (i===0 && !data ? 'checked' : '')}>
+                        <input placeholder="Option ${i+1}" class="w-full p-1 text-sm outline-none bg-transparent q-opt" value="${data && data.options[i] ? data.options[i].replace(/"/g, '&quot;') : ''}">
+                    </div>
+                `).join('')}
+            </div>
+            
+            <button onclick="this.closest('.question-card-ui').remove()" class="absolute top-2 right-2 text-gray-300 hover:text-red-500 p-2 rounded-full hover:bg-red-50 transition" title="Delete Question">
+                <i class="ph ph-trash text-xl"></i>
+            </button>
+        `;
+        document.getElementById('quiz-questions-list').appendChild(div);
     },
+
+    // NEW: Handle File Upload Button
+    uploadQuestionImage: async (input) => {
+        const file = input.files[0];
+        if (!file) return;
+        
+        // Find the text input in the same row to display the URL
+        const textInput = input.closest('.flex').querySelector('.q-image');
+        const originalPlaceholder = textInput.placeholder;
+        
+        textInput.value = '';
+        textInput.placeholder = "⏳ Uploading image...";
+        textInput.disabled = true;
+
+        try {
+            const ext = file.name.split('.').pop();
+            const path = `quiz_images/${Date.now()}_${Math.random().toString(16).slice(2)}.${ext}`;
+            
+            const { error } = await sb.storage.from('course_content').upload(path, file);
+            if (error) throw error;
+
+            const { data } = sb.storage.from('course_content').getPublicUrl(path);
+            textInput.value = data.publicUrl;
+            ui.toast("Image uploaded successfully!", "success");
+        } catch (e) {
+            console.error(e);
+            ui.toast("Upload failed: " + e.message, "error");
+        } finally {
+            textInput.disabled = false;
+            textInput.placeholder = originalPlaceholder;
+        }
+    },
+
+    // Handle Ctrl+V Paste (Keep existing feature)
+    handleImagePaste: async (e, inputEl) => {
+        const items = (e.clipboardData || e.originalEvent.clipboardData).items;
+        let file = null;
+        for (let i = 0; i < items.length; i++) {
+            if (items[i].type.indexOf("image") === 0) {
+                file = items[i].getAsFile();
+                break;
+            }
+        }
+        if (!file) return; 
+
+        e.preventDefault(); 
+        const row = inputEl.closest('.question-card-ui'); 
+        const imgInput = row.querySelector('.q-image');
+        
+        imgInput.placeholder = "⏳ Uploading pasted image...";
+        imgInput.disabled = true;
+
+        try {
+            const path = `quiz_images/${Date.now()}_paste.png`;
+            const { error } = await sb.storage.from('course_content').upload(path, file);
+            if (error) throw error;
+            const { data } = sb.storage.from('course_content').getPublicUrl(path);
+            imgInput.value = data.publicUrl;
+            ui.toast("Pasted image uploaded!", "success");
+        } catch (err) {
+            ui.toast("Paste upload failed", "error");
+        } finally {
+            imgInput.disabled = false;
+        }
+    },
+
+    // STUDENT: Take Quiz
     takeQuiz: async (id) => {
-        const { data } = await sb.from('content').select('data').eq('id', id).single();
-        if(!data || !data.data.questions) return alert("Error loading quiz");
+        const { data } = await sb.from('content').select('*').eq('id', id).single();
+        if(!data || !data.data?.questions) return ui.toast("Error loading quiz", "error");
+        
         document.getElementById('modal-take-quiz').classList.remove('hidden');
-        const body = document.getElementById('quiz-body'); body.innerHTML = ''; body.dataset.cid = id;
-        data.data.questions.forEach((q, idx) => {
-            let opts = ''; q.options.forEach((opt, oIdx) => { opts += `<label class="block p-2 border rounded mb-1 cursor-pointer hover:bg-gray-50"><input type="radio" name="q${idx}" value="${oIdx}"> ${opt}</label>`; });
-            body.innerHTML += `<div class="mb-4"><p class="font-bold mb-2">${idx+1}. ${q.q}</p>${opts}</div>`;
+        document.getElementById('quiz-title-display').innerText = data.title;
+        const container = document.getElementById('quiz-body');
+        container.innerHTML = '';
+        container.dataset.id = id; 
+
+        // 1. Copy & Shuffle
+        let allQuestions = [...data.data.questions]; 
+        for (let i = allQuestions.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [allQuestions[i], allQuestions[j]] = [allQuestions[j], allQuestions[i]];
+        }
+        
+        // 2. Limit Questions
+        const limit = data.data.questionCount || 10;
+        const selectedQuestions = allQuestions.slice(0, limit);
+        container.dataset.questions = JSON.stringify(selectedQuestions);
+
+        // 3. Render
+        selectedQuestions.forEach((q, idx) => {
+            const qEl = document.createElement('div');
+            qEl.className = "mb-4 border-b pb-4";
+            const displayQuestion = q.text || q.question || "Question";
+            
+            const imgHtml = q.image ? `<img src="${q.image}" class="max-w-full h-auto max-h-64 rounded mb-3 border border-gray-200 block shadow-sm">` : '';
+            
+            qEl.innerHTML = `
+                <p class="font-bold mb-3 text-gray-800 text-lg">${idx+1}. ${displayQuestion}</p>
+                ${imgHtml}
+                <div class="space-y-2">
+                    ${q.options.map((opt, i) => `
+                        <label class="flex items-center gap-3 p-3 border border-gray-200 hover:bg-teal-50 hover:border-teal-200 rounded-lg cursor-pointer transition group">
+                            <input type="radio" name="q-${idx}" value="${i}" class="w-4 h-4 text-teal-600 focus:ring-teal-500"> 
+                            <span class="text-sm text-gray-700 group-hover:text-teal-900">${opt}</span>
+                        </label>
+                    `).join('')}
+                </div>
+            `;
+            container.appendChild(qEl);
         });
     },
+
     closeTakeQuiz: () => document.getElementById('modal-take-quiz').classList.add('hidden'),
+
     submitQuiz: async () => {
-        const body = document.getElementById('quiz-body'); const cid = body.dataset.cid;
-        await sb.from('quiz_results').insert([{ user_id: state.user.id, content_id: cid, score: 100, total: 100 }]);
-        ui.toast("Quiz Submitted!"); quizManager.closeTakeQuiz();
+        const container = document.getElementById('quiz-body');
+        const questions = JSON.parse(container.dataset.questions);
+        let score = 0;
+        let userAnswers = []; 
+        
+        questions.forEach((q, idx) => {
+            const selected = document.querySelector(`input[name="q-${idx}"]:checked`);
+            const val = selected ? parseInt(selected.value) : -1;
+            userAnswers.push(val);
+            if(val === parseInt(q.correct)) score++;
+        });
+
+        await sb.from('quiz_results').insert([{
+            user_id: state.user.id,
+            content_id: container.dataset.id,
+            score: score,
+            total: questions.length
+        }]);
+
+        ui.toast(`Submitted! Score: ${score}/${questions.length}`, "success");
+        quizManager.renderReview(questions, userAnswers, score);
+    },
+
+    renderReview: (questions, userAnswers, score) => {
+        const container = document.getElementById('quiz-body');
+        const percentage = Math.round((score / questions.length) * 100);
+        
+        let html = `
+            <div class="text-center mb-6 border-b pb-4">
+                <h2 class="text-3xl font-bold ${percentage >= 50 ? 'text-green-600' : 'text-red-600'}">${percentage}%</h2>
+                <p class="text-gray-500">You scored ${score} out of ${questions.length}</p>
+            </div>
+            <div class="space-y-6">
+        `;
+
+        questions.forEach((q, idx) => {
+            const userAns = userAnswers[idx];
+            const correctAns = parseInt(q.correct);
+            const isCorrect = userAns === correctAns;
+            const boxClass = isCorrect ? "bg-green-50 border-green-200" : "bg-red-50 border-red-200";
+            
+            const imgHtml = q.image ? `<img src="${q.image}" class="max-w-full h-auto max-h-48 rounded mb-2 border border-gray-200 block">` : '';
+
+            html += `<div class="p-4 rounded-lg border ${boxClass}">
+                <p class="font-bold text-gray-800 mb-2">Q${idx+1}: ${q.text}</p>
+                ${imgHtml}
+                <div class="space-y-1 ml-2 mt-3">`;
+
+            q.options.forEach((opt, i) => {
+                let style = "text-gray-500";
+                let icon = `<i class="ph ph-circle text-gray-300"></i>`;
+                
+                if (i === correctAns) { 
+                    style = "font-bold text-green-700 bg-green-100 p-1 rounded"; 
+                    icon = `<i class="ph ph-check-circle text-green-600 text-lg"></i>`; 
+                }
+                if (i === userAns && !isCorrect) { 
+                    style = "font-bold text-red-600 bg-red-100 p-1 rounded"; 
+                    icon = `<i class="ph ph-x-circle text-red-600 text-lg"></i>`; 
+                }
+                
+                html += `<div class="flex items-center gap-2 text-sm ${style}">${icon} ${opt}</div>`;
+            });
+            html += `</div></div>`;
+        });
+
+        html += `</div>`;
+        container.innerHTML = html;
+
+        const footerBtn = document.querySelector('#modal-take-quiz .border-t button');
+        if(footerBtn) {
+            footerBtn.innerText = "Close Results";
+            footerBtn.className = "px-6 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded font-bold shadow";
+            footerBtn.onclick = () => quizManager.closeTakeQuiz();
+        }
     }
 };
 
