@@ -9,7 +9,7 @@ const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 const state = {
     user: null, profile: null,
     courses: [], activeCourse: null, activeSection: null, activeModule: null,
-    structure: []
+    structure: [] 
 };
 
 // ==========================================
@@ -17,37 +17,25 @@ const state = {
 // ==========================================
 function getIrishHolidays(year) {
     const holidays = [];
-
-    // Helper: If a fixed date is Sat/Sun, move to next Monday
     const addObserved = (dateStr) => {
         const d = new Date(dateStr);
         const day = d.getDay(); // 0=Sun, 6=Sat
-        if (day === 0) { // Sunday -> Monday
-            d.setDate(d.getDate() + 1);
-            holidays.push(d.toISOString().split('T')[0]);
-        } else if (day === 6) { // Saturday -> Monday
-            d.setDate(d.getDate() + 2);
-            holidays.push(d.toISOString().split('T')[0]);
-        } else {
-            holidays.push(dateStr);
-        }
+        if (day === 0) { d.setDate(d.getDate() + 1); holidays.push(d.toISOString().split('T')[0]); }
+        else if (day === 6) { d.setDate(d.getDate() + 2); holidays.push(d.toISOString().split('T')[0]); }
+        else { holidays.push(dateStr); }
     };
 
-    // 1. Fixed Dates (Move to Monday if weekend)
-    addObserved(`${year}-01-01`); // New Year's
-    addObserved(`${year}-03-17`); // St Patrick's Day
-    addObserved(`${year}-12-25`); // Christmas
-    addObserved(`${year}-12-26`); // St Stephen's
+    addObserved(`${year}-01-01`); // New Year
+    addObserved(`${year}-03-17`); // St Patrick
+    addObserved(`${year}-12-25`); // Xmas
+    addObserved(`${year}-12-26`); // Stephens
 
-    // 2. St Brigid's Day (First Mon in Feb, unless Feb 1st is Friday)
+    // St Brigid's (First Mon in Feb, unless Feb 1st is Friday)
     let feb1 = new Date(year, 1, 1);
-    if (feb1.getDay() === 5) holidays.push(`${year}-02-01`); // It's a Friday
-    else {
-        while (feb1.getDay() !== 1) feb1.setDate(feb1.getDate() + 1); // Find first Mon
-        holidays.push(feb1.toISOString().split('T')[0]);
-    }
+    if (feb1.getDay() === 5) holidays.push(`${year}-02-01`);
+    else { while (feb1.getDay() !== 1) feb1.setDate(feb1.getDate() + 1); holidays.push(feb1.toISOString().split('T')[0]); }
 
-    // 3. Easter (Good Friday & Easter Monday)
+    // Easter
     const f = Math.floor, y = year;
     const G = y % 19, C = f(y / 100), H = (C - f(C / 4) - f((8 * C + 13) / 25) + 19 * G + 15) % 30;
     const I = H - f(H / 28) * (1 - f(29 / (H + 1)) * f((21 - G) / 11));
@@ -62,15 +50,15 @@ function getIrishHolidays(year) {
     holidays.push(goodFriday.toISOString().split('T')[0]);
     holidays.push(easterMon.toISOString().split('T')[0]);
 
-    // 4. Bank Holidays (First Monday of May, June, August)
+    // Bank Holidays
     [4, 5, 7].forEach(m => { 
         let d = new Date(year, m, 1);
         while (d.getDay() !== 1) d.setDate(d.getDate() + 1);
         holidays.push(d.toISOString().split('T')[0]);
     });
     
-    // 5. October Bank Holiday (Last Monday)
-    let oct = new Date(year, 10, 0); // Oct 31st
+    // Oct Bank Holiday
+    let oct = new Date(year, 10, 0); 
     while (oct.getDay() !== 1) oct.setDate(oct.getDate() - 1);
     holidays.push(oct.toISOString().split('T')[0]);
 
@@ -123,8 +111,6 @@ function renderContentItem(file, unitId, myWork) {
         }
     }
     
-    const safeFile = JSON.stringify(file).replace(/'/g, "&#39;").replace(/"/g, "&quot;");
-
     return `
     <div class="bg-white p-2 rounded border border-gray-100 hover:border-teal-500 hover:shadow-sm transition group mb-1">
         <div class="flex items-center justify-between">
@@ -141,7 +127,7 @@ function renderContentItem(file, unitId, myWork) {
                 ${actionHtml}
                 ${isAdmin() ? `
                     <div class="hidden group-hover:flex gap-1">
-                        <button onclick='contentModal.open(${unitId}, ${safeFile})' class="text-gray-400 hover:text-blue-500 p-1"><i class="ph ph-pencil-simple"></i></button>
+                        <button onclick='contentModal.open(${unitId}, ${JSON.stringify(file).replace(/'/g, "&#39;").replace(/"/g, "&quot;")})' class="text-gray-400 hover:text-blue-500 p-1"><i class="ph ph-pencil-simple"></i></button>
                         <button onclick="courseManager.deleteItem('content', ${file.id})" class="text-gray-400 hover:text-red-500 p-1"><i class="ph ph-trash"></i></button>
                     </div>
                 ` : ''}
@@ -244,52 +230,107 @@ const ui = {
 // 4. CORE MANAGERS
 // ==========================================
 const dashboard = {
+    filter: 'all', // 'all' or 'my'
+    
     loadCourses: async () => {
         const grid = document.getElementById('course-grid');
         grid.innerHTML = '<div class="col-span-full text-center p-8"><i class="ph ph-spinner animate-spin text-3xl text-teal-600"></i></div>';
+        
+        // 1. Fetch Data
         const { data: courses } = await sb.from('courses').select('*').order('created_at');
         const { data: enrolls } = await sb.from('enrollments').select('*').eq('user_id', state.user.id);
         const myMap = {}; enrolls?.forEach(e => myMap[e.course_id] = e.course_role);
         
-        grid.innerHTML = '';
-        if(!courses || courses.length === 0) { grid.innerHTML = '<p class="col-span-full text-center text-gray-400">No courses.</p>'; return; }
+        // 2. Render Header with Filter (RESTORED)
+        const headerHtml = `
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-2xl font-bold text-slate-800">Available Courses</h2>
+                <div class="flex gap-2">
+                    <button onclick="dashboard.setFilter('all')" class="px-3 py-1 text-xs rounded-full font-bold transition ${dashboard.filter==='all'?'bg-teal-600 text-white':'bg-gray-200 text-gray-600 hover:bg-gray-300'}">All Courses</button>
+                    <button onclick="dashboard.setFilter('my')" class="px-3 py-1 text-xs rounded-full font-bold transition ${dashboard.filter==='my'?'bg-teal-600 text-white':'bg-gray-200 text-gray-600 hover:bg-gray-300'}">My Courses</button>
+                    <button id="btn-new-course" class="${state.profile.global_role === 'super_admin' ? '' : 'hidden'} ml-2 bg-teal-600 text-white px-3 py-1 text-xs rounded shadow hover:bg-teal-700 transition" onclick="entityModal.open('course')">+ New</button>
+                </div>
+            </div>
+        `;
         
-        courses.forEach(c => {
-            const role = myMap[c.id];
-            if(state.profile.global_role !== 'super_admin' && !role) return;
-            
-            const card = document.createElement('div');
-            card.className = "bg-white rounded-lg shadow hover:shadow-lg transition cursor-pointer border border-transparent hover:border-teal-500 overflow-hidden flex flex-col h-full";
-            card.onclick = () => dashboard.openCourse(c, role);
-            
-            const imgHtml = c.image_url ? `<div class="h-32 bg-cover bg-center" style="background-image: url('${c.image_url}')"></div>` : `<div class="h-32 bg-teal-100 flex items-center justify-center text-teal-600"><i class="ph ph-book text-4xl"></i></div>`;
-            card.innerHTML = `${imgHtml}<div class="p-5"><h3 class="font-bold text-lg mb-1">${c.title}</h3><p class="text-sm text-gray-500 line-clamp-2">${c.description||''}</p></div>`;
-            grid.appendChild(card);
-        });
+        // 3. Filter & Render Grid
+        let cardsHtml = '';
+        if(!courses || courses.length === 0) { 
+            cardsHtml = '<p class="col-span-full text-center text-gray-400">No courses available.</p>'; 
+        } else {
+            const filtered = courses.filter(c => {
+                const role = myMap[c.id];
+                if(dashboard.filter === 'my') return !!role; // Only show enrolled
+                return true; // Show all (Admin can see all, Students see all public)
+            });
+
+            if(filtered.length === 0) {
+                cardsHtml = `<div class="col-span-full text-center py-10 text-gray-400"><p>No courses found in this view.</p></div>`;
+            } else {
+                cardsHtml = `<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">` + 
+                filtered.map(c => {
+                    const role = myMap[c.id];
+                    // Hide if not enrolled and not admin? (Optional logic, currently showing all for "All")
+                    const imgStyle = c.image_url ? `background-image: url('${c.image_url}')` : '';
+                    const imgHtml = c.image_url ? `<div class="h-32 bg-cover bg-center" style="${imgStyle}"></div>` : `<div class="h-32 bg-teal-100 flex items-center justify-center text-teal-600"><i class="ph ph-book text-4xl"></i></div>`;
+                    
+                    return `
+                    <div class="bg-white rounded-lg shadow hover:shadow-lg transition cursor-pointer border border-transparent hover:border-teal-500 overflow-hidden flex flex-col h-full" onclick="dashboard.openCourse(${c.id}, '${role||''}')">
+                        ${imgHtml}
+                        <div class="p-5 flex-1 flex flex-col">
+                            <h3 class="font-bold text-lg mb-1 text-slate-800">${c.title}</h3>
+                            <p class="text-sm text-gray-500 line-clamp-2 flex-1">${c.description||''}</p>
+                            ${role ? `<div class="mt-3"><span class="text-[10px] font-bold uppercase tracking-wide bg-blue-100 text-blue-700 px-2 py-1 rounded">${role}</span></div>` : ''}
+                        </div>
+                    </div>`;
+                }).join('') + `</div>`;
+            }
+        }
+
+        // 4. Update DOM
+        // We need to inject the header + grid into #dashboard-content
+        // But dashboard-content usually only had the grid. Let's clear and rebuild.
+        const dbContainer = document.getElementById('dashboard-content');
+        dbContainer.innerHTML = headerHtml + cardsHtml;
+        
+        // Re-bind the onclicks for filter (since innerHTML wipes them if not on window)
+        // They are on dashboard.setFilter, ensuring dashboard is on window.
     },
-    openCourse: (course, role) => {
-        state.activeCourse = course;
-        state.courseRole = state.profile.global_role === 'super_admin' ? 'super_admin' : role;
-        document.getElementById('dashboard-content').classList.add('hidden');
-        document.getElementById('course-content').classList.remove('hidden');
-        document.getElementById('active-course-title').innerText = course.title;
-        document.getElementById('active-course-desc').innerText = course.description || '';
-        document.getElementById('breadcrumb-container').innerHTML = `<i class="ph ph-caret-right mx-2"></i> <span class="font-semibold text-slate-700">${course.title}</span>`;
-        ui.switchTab('content');
-        courseManager.loadSyllabus();
-        
-        const isStaff = ['instructor', 'super_admin'].includes(state.courseRole);
-        ['btn-add-section', 'btn-add-unit', 'tab-btn-team', 'tab-btn-schedule'].forEach(id => {
-            document.getElementById(id)?.classList.toggle('hidden', !isStaff);
+
+    setFilter: (f) => {
+        dashboard.filter = f;
+        dashboard.loadCourses();
+    },
+
+    openCourse: (courseId, role) => {
+        // Need to fetch full object since we just passed ID
+        sb.from('courses').select('*').eq('id', courseId).single().then(({data: course}) => {
+            state.activeCourse = course;
+            state.courseRole = state.profile.global_role === 'super_admin' ? 'super_admin' : role;
+            document.getElementById('dashboard-content').classList.add('hidden');
+            document.getElementById('course-content').classList.remove('hidden');
+            document.getElementById('active-course-title').innerText = course.title;
+            document.getElementById('active-course-desc').innerText = course.description || '';
+            document.getElementById('breadcrumb-container').innerHTML = `<i class="ph ph-caret-right mx-2"></i> <span class="font-semibold text-slate-700">${course.title}</span>`;
+            ui.switchTab('content');
+            courseManager.loadSyllabus();
+            
+            const isStaff = ['instructor', 'super_admin'].includes(state.courseRole);
+            ['btn-add-section', 'btn-add-unit', 'tab-btn-team', 'tab-btn-schedule'].forEach(id => {
+                const el = document.getElementById(id);
+                if(el) el.classList.toggle('hidden', !isStaff);
+            });
         });
     }
 };
 
 const courseManager = {
     // 1. SYLLABUS
-    loadSyllabus: async () => {
-        const list = document.getElementById('syllabus-list');
-        list.innerHTML = '<div class="p-4 text-center"><i class="ph ph-spinner animate-spin text-teal-600"></i></div>';
+    loadSyllabus: async (silent = false) => {
+        if(!silent) {
+            const list = document.getElementById('syllabus-list');
+            if(list) list.innerHTML = '<div class="p-4 text-center"><i class="ph ph-spinner animate-spin text-teal-600"></i></div>';
+        }
         
         const palette = ['#dbeafe', '#d1fae5', '#fef9c3', '#fee2e2', '#f3e8ff', '#ffedd5'];
         
@@ -299,8 +340,12 @@ const courseManager = {
         if(!isAdmin()) query = query.eq('is_visible', true);
 
         const { data: sections } = await query;
-        list.innerHTML = '';
         state.structure = sections || []; 
+
+        if(silent) return; // If called by Scheduler just to load data
+
+        const list = document.getElementById('syllabus-list');
+        list.innerHTML = '';
 
         if (!sections || sections.length === 0) { 
             list.innerHTML = '<div class="text-center text-gray-400 p-4 text-sm">No sections yet.</div>'; 
@@ -669,7 +714,6 @@ const courseManager = {
     updateHours: async (unitId, hours) => {
         try {
             await sb.from('units').update({ total_hours_required: hours }).eq('id', unitId);
-            // Update local state if needed for sidebar
             state.structure.forEach(s => s.modules?.forEach(m => m.units?.forEach(u => { if(u.id == unitId) u.total_hours_required = parseFloat(hours); })));
             if(!document.getElementById('tab-schedule').classList.contains('hidden')) schedulerManager.renderSidebar(); 
         } catch (e) { ui.toast("Error updating hours", "error"); }
@@ -735,32 +779,30 @@ const schedulerManager = {
         schedulerManager.schedules = data || [];
     },
 
-    // --- SIDEBAR WITH COLLAPSIBLE MODULES & SORTING ---
-    renderSidebar: () => {
+    renderSidebar: async () => {
         const list = document.getElementById('scheduler-sidebar');
         if (!list) return;
         list.innerHTML = '';
 
-        // Calculate hours scheduled per unit
+        // FIX: Ensure structure is loaded if user went straight to scheduler
+        if (!state.structure || state.structure.length === 0) {
+            await courseManager.loadSyllabus(true);
+        }
+
         const progressMap = {};
         schedulerManager.schedules.forEach(s => {
-            if(s.unit_id) {
-                progressMap[s.unit_id] = (progressMap[s.unit_id] || 0) + (s.hours_assigned || 0);
-            }
+            if(s.unit_id) progressMap[s.unit_id] = (progressMap[s.unit_id] || 0) + (s.hours_assigned || 0);
         });
 
-        // Use the sorted state.structure directly
         state.structure.forEach(section => {
             const modules = section.modules?.sort((a,b) => a.position - b.position) || [];
             
             modules.forEach(mod => {
                 if(!mod.units || mod.units.length === 0) return;
-                
-                // Sort units inside module
                 const units = mod.units.sort((a,b) => a.position - b.position);
 
                 const details = document.createElement('details');
-                details.open = true; // Open by default
+                details.open = true; 
                 details.className = "group mb-2 border-b border-gray-100 pb-2";
                 
                 details.innerHTML = `
@@ -813,7 +855,6 @@ const schedulerManager = {
         e.dataTransfer.setData('title', type === 'exam' ? 'Exam' : 'Holiday');
     },
 
-    // --- CALENDAR RENDERING ---
     renderCalendar: () => {
         const container = document.getElementById('calCont');
         if (!container) return;
@@ -1001,7 +1042,6 @@ const schedulerManager = {
         }
     },
 
-    // Date Shifting Helpers
     shiftFutureItems: async (fromDateStr, days) => {
         const { data: items } = await sb.from('schedules').select('*')
             .eq('course_id', state.activeCourse.id)
@@ -1009,7 +1049,6 @@ const schedulerManager = {
             
         if (!items || items.length === 0) return;
 
-        // Simple Working Day Adder
         const addWorkingDays = (startDate, days) => {
              let current = new Date(startDate);
              let added = 0;
