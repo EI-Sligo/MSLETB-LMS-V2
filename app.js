@@ -788,8 +788,10 @@ const schedulerManager = {
     },
 
     fetchData: async () => {
-        // FIXED: Select only columns from this table to avoid 400 error on join
-        const { data } = await sb.from('schedules').select('*').eq('course_id', state.activeCourse.id);
+        // FIX: Select only specific columns to prevent 400 Error (Removed the join)
+        const { data } = await sb.from('schedules')
+            .select('*')
+            .eq('course_id', state.activeCourse.id);
         schedulerManager.schedules = data || [];
     },
 
@@ -999,8 +1001,9 @@ const schedulerManager = {
                     } else if (item.type === 'holiday') {
                         borderColor = '#ef4444'; bgColor = '#fef2f2'; textColor = '#991b1b';
                     } else if (item.type === 'other') {
-                        // FIXED: Styling for "Other" items so they are visible
-                        borderColor = '#f59e0b'; bgColor = '#fffbeb'; textColor = '#92400e';
+                        // FIX: Add styling for 'other' so it is visible
+                        borderColor = '#f59e0b'; bgColor = '#fffbeb'; textColor = '#92400e'; 
+                    
                     }
 
                     div.style.borderLeftColor = borderColor;
