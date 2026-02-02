@@ -342,7 +342,7 @@ const courseManager = {
         const { data: sections } = await query;
         state.structure = sections || []; 
 
-        if(silent) return; // If called by Scheduler just to load data
+        if(silent) return; 
 
         const list = document.getElementById('syllabus-list');
         list.innerHTML = '';
@@ -375,18 +375,23 @@ const courseManager = {
                     </div>
                 </div>
                 <div id="acc-content-${section.id}" class="pl-4 pb-2 space-y-1 hidden">
-                    ${modules.map(mod => `
-                        <div class="p-2 rounded cursor-pointer text-sm text-gray-600 hover:bg-teal-50 hover:text-teal-700 flex justify-between items-center group transition" onclick="courseManager.openModule('${mod.id}')">
+                    ${modules.map(m => `
+                        <div class="p-2 rounded cursor-pointer text-sm text-gray-600 hover:bg-teal-50 hover:text-teal-700 flex justify-between items-center group transition" onclick="courseManager.openModule('${m.id}')">
                             <div class="flex items-center gap-2 flex-1">
-                                <div class="w-2 h-2 rounded-full" style="background:${mod.color}"></div>
-                                <span class="truncate">${mod.title}</span>
+                                <div class="w-2 h-2 rounded-full" style="background:${m.color}"></div>
+                                <span class="truncate ${!m.is_visible ? 'opacity-50 italic' : ''}">${m.title}</span>
                             </div>
                             <div class="flex items-center gap-1" onclick="event.stopPropagation()">
                                 ${isAdmin() ? `
-                                    <button onclick="courseManager.moveItem('modules', ${mod.id}, 'up')" class="text-gray-400 hover:text-teal-600 hidden group-hover:block"><i class="ph ph-arrow-up"></i></button>
-                                    <button onclick="courseManager.moveItem('modules', ${mod.id}, 'down')" class="text-gray-400 hover:text-teal-600 hidden group-hover:block"><i class="ph ph-arrow-down"></i></button>
-                                    <button onclick="entityModal.open('module', ${mod.id}, '${mod.title.replace(/'/g,"")}')" class="text-blue-400 hover:text-blue-600 hidden group-hover:block"><i class="ph ph-pencil-simple"></i></button>
-                                    <button onclick="courseManager.deleteItem('modules', ${mod.id})" class="text-red-400 hover:text-red-600 hidden group-hover:block"><i class="ph ph-trash"></i></button>
+                                    <input type="checkbox" class="accent-teal-600 mr-1" title="Visible?" 
+                                        ${m.is_visible ? 'checked' : ''} 
+                                        onclick="courseManager.toggleVisibility('modules', ${m.id}, this.checked)">
+                                        
+                                    <button onclick="courseManager.moveItem('modules', ${m.id}, 'up')" class="text-gray-400 hover:text-teal-600 hidden group-hover:block"><i class="ph ph-arrow-up"></i></button>
+                                    <button onclick="courseManager.moveItem('modules', ${m.id}, 'down')" class="text-gray-400 hover:text-teal-600 hidden group-hover:block"><i class="ph ph-arrow-down"></i></button>
+                                    
+                                    <button onclick="entityModal.open('module', ${m.id}, '${m.title.replace(/'/g,"")}')" class="text-blue-400 hover:text-blue-600 hidden group-hover:block"><i class="ph ph-pencil-simple"></i></button>
+                                    <button onclick="courseManager.deleteItem('modules', ${m.id})" class="text-red-400 hover:text-red-600 hidden group-hover:block"><i class="ph ph-trash"></i></button>
                                 ` : ''}
                             </div>
                         </div>`).join('')}
@@ -404,7 +409,10 @@ const courseManager = {
         document.getElementById('current-module-title').innerHTML = `<span class="flex items-center gap-2 text-teal-900 font-bold"><i class="ph ph-folder-open"></i> ${module.title}</span>`;
         
         if(isAdmin()) {
-            document.getElementById('btn-add-unit').classList.remove('hidden');
+            const btnAdd = document.getElementById('btn-add-unit');
+            btnAdd.classList.remove('hidden');
+            btnAdd.onclick = courseManager.addUnit; // FIX: Explicitly bind the click handler
+
             let bulkBtn = document.getElementById('btn-bulk-edit');
             if(!bulkBtn) {
                 bulkBtn = document.createElement('button');
@@ -412,11 +420,10 @@ const courseManager = {
                 bulkBtn.className = "text-xs bg-indigo-50 text-indigo-700 px-3 py-1 rounded border border-indigo-200 mr-2 hover:bg-indigo-100 font-bold flex items-center gap-1";
                 bulkBtn.innerHTML = `<i class="ph ph-list-dashes"></i> Bulk Edit`;
                 bulkBtn.onclick = () => courseManager.openBulkEdit(); 
-                const container = document.getElementById('btn-add-unit').parentElement;
-                container.insertBefore(bulkBtn, document.getElementById('btn-add-unit'));
+                const container = btnAdd.parentElement;
+                container.insertBefore(bulkBtn, btnAdd);
             }
         }
-
         const container = document.getElementById('unit-container');
         container.innerHTML = '<div class="text-gray-400 p-8 flex justify-center"><i class="ph ph-spinner animate-spin text-2xl"></i></div>';
         
@@ -853,9 +860,73 @@ const schedulerManager = {
 
     dragMisc: (e, type) => {
         e.dataTransfer.setData('type', type);
-        e.dataTransfer.setData('title', type === 'exam' ? 'Exam' : 'Holiday');
+        // Default titles
+        let title = type === 'exam' ? 'Exam' : (type === 'holiday' ? 'Holiday' : 'Event');
+        e.dataTransfer.setData('title', title);
     },
 
+    handleDrop: async (e, dateStr) => {
+        e.preventDefault();
+        const type = e.dataTransfer.getData('type');
+        
+        if (type === 'move') {
+            const moveId = e.dataTransfer.getData('moveId');
+            await sb.from('schedules').update({ date: dateStr }).eq('id', moveId);
+            schedulerManager.init();
+            return;
+        }
+
+        const modal = document.getElementById('modal-sched-action');
+        const titleEl = document.getElementById('sched-modal-title');
+        const confirmBtn = document.getElementById('btn-sched-confirm');
+        const inputHours = document.getElementById('sched-input-hours');
+        const inputInsert = document.getElementById('sched-input-insert');
+
+        let title = e.dataTransfer.getData('title');
+        let unitId = e.dataTransfer.getData('id');
+
+        // NEW: Ask for name if "Other"
+        if (type === 'other') {
+            const customName = prompt("Enter label for this block:", "Meeting");
+            if (!customName) return; 
+            title = customName;
+        }
+
+        titleEl.innerText = title;
+        modal.classList.remove('hidden');
+        inputHours.value = 6.5; 
+        inputInsert.checked = false;
+
+        // Clone button to remove old listeners
+        const newBtn = confirmBtn.cloneNode(true);
+        confirmBtn.parentNode.replaceChild(newBtn, confirmBtn);
+
+        newBtn.onclick = async () => {
+            const hours = parseFloat(inputHours.value);
+            const isInsert = inputInsert.checked;
+            
+            modal.classList.add('hidden');
+            ui.toast("Scheduling...", "info");
+
+            if (isInsert) await schedulerManager.shiftFutureItems(dateStr, 1);
+
+            await sb.from('schedules').insert([{
+                course_id: state.activeCourse.id,
+                unit_id: type === 'unit' ? parseInt(unitId) : null,
+                type: type, 
+                label: type !== 'unit' ? title : null, // Save the custom name
+                date: dateStr,
+                hours_assigned: hours
+            }]);
+
+            schedulerManager.init();
+        };
+dragMisc: (e, type) => {
+        e.dataTransfer.setData('type', type);
+        // Default titles
+        let title = type === 'exam' ? 'Exam' : (type === 'holiday' ? 'Holiday' : 'Event');
+        e.dataTransfer.setData('title', title);
+    },
     renderCalendar: () => {
         const container = document.getElementById('calCont');
         if (!container) return;
@@ -926,13 +997,16 @@ const schedulerManager = {
                         const mod = state.structure.flatMap(s=>s.modules||[]).find(m=>m.id == item.units.module_id);
                         if(mod && mod.color) {
                              bgColor = mod.color; 
-                             borderColor = '#94a3b8'; // Neutral border
+                             borderColor = '#94a3b8';
                              textColor = '#334155';
                         }
                     } else if (item.type === 'exam') {
                         borderColor = '#9333ea'; bgColor = '#f3e8ff'; textColor = '#6b21a8';
                     } else if (item.type === 'holiday') {
                         borderColor = '#ef4444'; bgColor = '#fef2f2'; textColor = '#991b1b';
+                    } else if (item.type === 'other') {
+                        // NEW: Styling for 'Other'
+                        borderColor = '#f59e0b'; bgColor = '#fffbeb'; textColor = '#92400e'; // Amber
                     }
 
                     div.style.borderLeftColor = borderColor;
@@ -979,11 +1053,19 @@ const schedulerManager = {
         let title = e.dataTransfer.getData('title');
         let unitId = e.dataTransfer.getData('id');
 
+        // NEW: Ask for name if "Other"
+        if (type === 'other') {
+            const customName = prompt("Enter label for this block:", "Meeting");
+            if (!customName) return; 
+            title = customName;
+        }
+
         titleEl.innerText = title;
         modal.classList.remove('hidden');
         inputHours.value = 6.5; 
         inputInsert.checked = false;
 
+        // Clone button to remove old listeners
         const newBtn = confirmBtn.cloneNode(true);
         confirmBtn.parentNode.replaceChild(newBtn, confirmBtn);
 
@@ -1000,7 +1082,7 @@ const schedulerManager = {
                 course_id: state.activeCourse.id,
                 unit_id: type === 'unit' ? parseInt(unitId) : null,
                 type: type, 
-                label: type !== 'unit' ? title : null,
+                label: type !== 'unit' ? title : null, // Save the custom name
                 date: dateStr,
                 hours_assigned: hours
             }]);
