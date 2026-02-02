@@ -875,12 +875,7 @@ const schedulerManager = {
         let title = e.dataTransfer.getData('title');
         let unitId = e.dataTransfer.getData('id');
 
-        if(type === 'other') {
-            const name = prompt("Event Name:", "Meeting");
-            if(!name) return;
-            title = name;
-        }
-
+        
         titleEl.innerText = title;
         modal.classList.remove('hidden');
         inputHours.value = 6.5; 
