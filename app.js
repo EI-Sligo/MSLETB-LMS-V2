@@ -863,7 +863,7 @@ const schedulerManager = {
 
     dragMisc: (e, type) => {
         e.dataTransfer.setData('type', type);
-        let title = type === 'exam' ? 'Exam' : (type === 'holiday' ? 'Holiday' :  let title = type === 'other' ? 'Other' :);
+        let title = type === 'exam' ? 'Exam' : (type === 'holiday' ? 'Holiday' :  (type === 'other' ? 'Other' : 'Custom'));
         e.dataTransfer.setData('title', title);
     },
 
