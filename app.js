@@ -232,22 +232,23 @@ const ui = {
 // ==========================================
 // 4. CORE MANAGERS
 // ==========================================
+// ==========================================
+// 4. CORE MANAGERS
+// ==========================================
 const dashboard = {
-    filter: 'all', // 'all' or 'my'
+    filter: 'all', 
     
     loadCourses: async () => {
+        // 1. Show Spinner (safely)
         const grid = document.getElementById('course-grid');
-        grid.innerHTML = '<div class="col-span-full text-center p-8"><i class="ph ph-spinner animate-spin text-3xl text-teal-600"></i></div>';
+        if (grid) grid.innerHTML = '<div class="col-span-full text-center p-8"><i class="ph ph-spinner animate-spin text-3xl text-teal-600"></i></div>';
         
-        // 1. Fetch Data
+        // 2. Fetch Data
         const { data: courses } = await sb.from('courses').select('*').order('created_at');
         const { data: enrolls } = await sb.from('enrollments').select('*').eq('user_id', state.user.id);
+        const myMap = {}; enrolls?.forEach(e => myMap[e.course_id] = e.course_role);
         
-        // Create a map of course_id -> role
-        const myMap = {}; 
-        enrolls?.forEach(e => myMap[e.course_id] = e.course_role);
-        
-        // 2. Render Header with Filter
+        // 3. Render Header
         const headerHtml = `
             <div class="flex justify-between items-center mb-6">
                 <h2 class="text-2xl font-bold text-slate-800">Available Courses</h2>
@@ -259,24 +260,22 @@ const dashboard = {
             </div>
         `;
         
-        // 3. Filter & Render Grid
+        // 4. Filter & Render Grid
         let cardsHtml = '';
         if(!courses || courses.length === 0) { 
-            cardsHtml = '<p class="col-span-full text-center text-gray-400">No courses available.</p>'; 
+            cardsHtml = '<div id="course-grid" class="col-span-full text-center text-gray-400"><p>No courses available.</p></div>'; 
         } else {
             const filtered = courses.filter(c => {
                 const role = myMap[c.id];
-                if(dashboard.filter === 'my') {
-                    // Show if enrolled OR if you are the creator/super_admin (optional, but safer)
-                    return !!role; 
-                }
+                if(dashboard.filter === 'my') return !!role; 
                 return true; 
             });
 
             if(filtered.length === 0) {
-                cardsHtml = `<div class="col-span-full text-center py-10 text-gray-400"><p>No courses found in this view.</p></div>`;
+                cardsHtml = `<div id="course-grid" class="col-span-full text-center py-10 text-gray-400"><p>No courses found in this view.</p></div>`;
             } else {
-                cardsHtml = `<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">` + 
+                // IMPORTANT: Added id="course-grid" here to prevent the "Cannot set properties of null" error
+                cardsHtml = `<div id="course-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">` + 
                 filtered.map(c => {
                     const role = myMap[c.id];
                     const imgStyle = c.image_url ? `background-image: url('${c.image_url}')` : '';
@@ -295,7 +294,7 @@ const dashboard = {
             }
         }
 
-        // 4. Update DOM
+        // 5. Update DOM
         const dbContainer = document.getElementById('dashboard-content');
         dbContainer.innerHTML = headerHtml + cardsHtml;
     },
@@ -767,6 +766,12 @@ const courseManager = {
 // ==========================================
 // 5. SCHEDULER MANAGER
 // ==========================================
+// ==========================================
+// 5. SCHEDULER MANAGER
+// ==========================================
+// ==========================================
+// 5. SCHEDULER MANAGER
+// ==========================================
 const schedulerManager = {
     currentDate: new Date(),
     schedules: [],
@@ -776,84 +781,66 @@ const schedulerManager = {
              const btn = document.getElementById('tab-btn-schedule');
              if(btn) btn.classList.remove('hidden');
         }
+        if(!state.structure || !state.structure.length) await courseManager.loadSyllabus(true);
         await schedulerManager.fetchData();
         schedulerManager.renderSidebar();
         schedulerManager.renderCalendar();
     },
 
     fetchData: async () => {
-        const { data } = await sb.from('schedules')
-            .select('*, units:unit_id(title, total_hours_required, module_id)')
-            .eq('course_id', state.activeCourse.id);
+        // FIXED: Select only columns from this table to avoid 400 error on join
+        const { data } = await sb.from('schedules').select('*').eq('course_id', state.activeCourse.id);
         schedulerManager.schedules = data || [];
     },
 
-    renderSidebar: async () => {
+    renderSidebar: () => {
         const list = document.getElementById('scheduler-sidebar');
         if (!list) return;
         list.innerHTML = '';
+        
+        const map = {};
+        schedulerManager.schedules.forEach(s => { if(s.unit_id) map[s.unit_id] = (map[s.unit_id]||0) + s.hours_assigned; });
 
-        // FIX: Ensure structure is loaded if user went straight to scheduler
-        if (!state.structure || state.structure.length === 0) {
-            await courseManager.loadSyllabus(true);
-        }
-
-        const progressMap = {};
-        schedulerManager.schedules.forEach(s => {
-            if(s.unit_id) progressMap[s.unit_id] = (progressMap[s.unit_id] || 0) + (s.hours_assigned || 0);
-        });
-
-        state.structure.forEach(section => {
-            const modules = section.modules?.sort((a,b) => a.position - b.position) || [];
-            
+        state.structure.forEach(sec => {
+            const modules = sec.modules?.sort((a,b)=>a.position-b.position) || [];
             modules.forEach(mod => {
-                if(!mod.units || mod.units.length === 0) return;
-                const units = mod.units.sort((a,b) => a.position - b.position);
-
-                const details = document.createElement('details');
-                details.open = true; 
-                details.className = "group mb-2 border-b border-gray-100 pb-2";
+                if(!mod.units?.length) return;
                 
+                const details = document.createElement('details');
+                details.open = true;
+                details.className = "mb-2 group border border-gray-200 rounded bg-white overflow-hidden";
                 details.innerHTML = `
-                    <summary class="flex items-center gap-2 mb-2 cursor-pointer list-none select-none">
-                        <i class="ph ph-caret-right text-gray-400 transition-transform group-open:rotate-90 text-[10px]"></i>
-                        <div class="w-2 h-2 rounded-full" style="background:${mod.color || '#cbd5e1'}"></div>
-                        <div class="text-[10px] font-bold text-gray-500 uppercase tracking-wider truncate flex-1">${mod.title}</div>
+                    <summary class="flex items-center gap-2 p-2 bg-gray-50 cursor-pointer list-none text-xs font-bold text-gray-600 uppercase">
+                        <div class="w-2 h-2 rounded-full" style="background:${mod.color}"></div>
+                        <span class="flex-1 truncate">${mod.title}</span>
+                        <i class="ph ph-caret-down transition group-open:rotate-180"></i>
                     </summary>
-                    <div class="pl-2 space-y-1"></div>
+                    <div class="unit-list p-2 space-y-1 bg-white"></div>
                 `;
                 
-                // Select the container by class to ensure we don't grab the circle div
-                const unitContainer = details.querySelector('.space-y-1');
-
-                units.forEach(u => {
-                    const scheduled = progressMap[u.id] || 0;
+                const cont = details.querySelector('.unit-list');
+                mod.units.sort((a,b)=>a.position-b.position).forEach(u => {
+                    const scheduled = map[u.id] || 0;
                     const total = u.total_hours_required || 0;
-                    const isComplete = total > 0 && scheduled >= total;
-                    const pct = total > 0 ? Math.min((scheduled / total) * 100, 100) : 0;
+                    const done = total > 0 && scheduled >= total;
+                    const pct = total > 0 ? Math.min((scheduled/total)*100, 100) : 0;
 
-                    const div = document.createElement('div');
-                    div.className = `p-2 bg-white border ${isComplete ? 'border-green-400' : 'border-gray-200'} rounded shadow-sm cursor-grab hover:shadow-md transition relative group`;
-                    div.draggable = true;
-                    div.ondragstart = (e) => {
-                        e.dataTransfer.setData('type', 'unit');
-                        e.dataTransfer.setData('id', u.id);
-                        e.dataTransfer.setData('title', u.title);
-                    };
+                    const el = document.createElement('div');
+                    el.draggable = true;
+                    el.className = `p-2 border rounded cursor-grab hover:shadow-md bg-white ${done ? 'border-green-300' : 'border-gray-200'}`;
+                    el.ondragstart = (e) => { e.dataTransfer.setData('type','unit'); e.dataTransfer.setData('id',u.id); e.dataTransfer.setData('title',u.title); };
                     
-                    div.innerHTML = `
-                        <div class="flex justify-between items-start text-xs font-medium text-slate-700">
-                            <span>${u.title}</span>
-                            ${isComplete ? '<i class="ph ph-check-circle text-green-500 text-sm"></i>' : ''}
+                    el.innerHTML = `
+                        <div class="flex justify-between text-[10px] font-bold text-gray-700 mb-1">
+                            <span class="truncate">${u.title}</span>
+                            ${done ? '<i class="ph ph-check-circle text-green-500"></i>' : ''}
                         </div>
-                        <div class="flex justify-between items-center mt-1 text-[10px] text-gray-400">
-                            <span>${scheduled}/${total}h</span>
+                        <div class="h-1.5 w-full bg-gray-100 rounded-full overflow-hidden">
+                            <div class="h-full ${done?'bg-green-500':'bg-teal-500'}" style="width:${pct}%"></div>
                         </div>
-                        <div class="prog-track">
-                            <div class="prog-fill ${isComplete ? 'bg-green-500' : 'bg-teal-500'}" style="width: ${pct}%"></div>
-                        </div>
+                        <div class="text-[9px] text-right text-gray-400 mt-0.5">${scheduled}/${total}h</div>
                     `;
-                    unitContainer.appendChild(div);
+                    cont.appendChild(el);
                 });
                 list.appendChild(details);
             });
@@ -862,8 +849,7 @@ const schedulerManager = {
 
     dragMisc: (e, type) => {
         e.dataTransfer.setData('type', type);
-        // Default titles
-        let title = type === 'exam' ? 'Exam' : (type === 'holiday' ? 'Holiday' : 'Event');
+        let title = type === 'exam' ? 'Exam' : (type === 'holiday' ? 'Holiday' : 'Other');
         e.dataTransfer.setData('title', title);
     },
 
@@ -887,11 +873,10 @@ const schedulerManager = {
         let title = e.dataTransfer.getData('title');
         let unitId = e.dataTransfer.getData('id');
 
-        // NEW: Ask for name if "Other"
-        if (type === 'other') {
-            const customName = prompt("Enter label for this block:", "Meeting");
-            if (!customName) return; 
-            title = customName;
+        if(type === 'other') {
+            const name = prompt("Event Name:", "Meeting");
+            if(!name) return;
+            title = name;
         }
 
         titleEl.innerText = title;
@@ -899,37 +884,31 @@ const schedulerManager = {
         inputHours.value = 6.5; 
         inputInsert.checked = false;
 
-        // Clone button to remove old listeners
         const newBtn = confirmBtn.cloneNode(true);
         confirmBtn.parentNode.replaceChild(newBtn, confirmBtn);
 
         newBtn.onclick = async () => {
             const hours = parseFloat(inputHours.value);
-            const isInsert = inputInsert.checked;
             
             modal.classList.add('hidden');
             ui.toast("Scheduling...", "info");
 
-            if (isInsert) await schedulerManager.shiftFutureItems(dateStr, 1);
+            if (inputInsert.checked) await schedulerManager.shiftFutureItems(dateStr, 1);
 
+            // FIXED: unit_id null for misc items prevents 400 error
             await sb.from('schedules').insert([{
                 course_id: state.activeCourse.id,
                 unit_id: type === 'unit' ? parseInt(unitId) : null,
                 type: type, 
-                label: type !== 'unit' ? title : null, // Save the custom name
+                label: type !== 'unit' ? title : null,
                 date: dateStr,
                 hours_assigned: hours
             }]);
 
             schedulerManager.init();
         };
-        },
-dragMisc: (e, type) => {
-        e.dataTransfer.setData('type', type);
-        // Default titles
-        let title = type === 'exam' ? 'Exam' : (type === 'holiday' ? 'Holiday' : 'Event');
-        e.dataTransfer.setData('title', title);
     },
+
     renderCalendar: () => {
         const container = document.getElementById('calCont');
         if (!container) return;
@@ -968,6 +947,16 @@ dragMisc: (e, type) => {
             grid.innerHTML += `<div class="cal-cell bg-gray-50/50"></div>`;
         }
 
+        const getUnitDetails = (uid) => {
+            for(const sec of state.structure) {
+                for(const mod of (sec.modules||[])) {
+                    const u = mod.units?.find(x => x.id == uid);
+                    if(u) return { title: u.title, color: mod.color };
+                }
+            }
+            return null;
+        };
+
         for (let d = 1; d <= daysInMonth; d++) {
             const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
             const isWeekend = new Date(dateStr).getDay() === 0 || new Date(dateStr).getDay() === 6;
@@ -995,34 +984,32 @@ dragMisc: (e, type) => {
                     let borderColor = '#3b82f6'; 
                     let bgColor = '#eff6ff';
                     let textColor = '#1e40af';
+                    let displayLabel = item.label || 'Item';
 
-                    if (item.type === 'unit' && item.units?.module_id && state.structure) {
-                        const mod = state.structure.flatMap(s=>s.modules||[]).find(m=>m.id == item.units.module_id);
-                        if(mod && mod.color) {
-                             bgColor = mod.color; 
+                    if (item.type === 'unit' && item.unit_id) {
+                         const details = getUnitDetails(item.unit_id);
+                         if(details) {
+                             bgColor = details.color; 
                              borderColor = '#94a3b8';
                              textColor = '#334155';
-                        }
+                             displayLabel = details.title;
+                         }
                     } else if (item.type === 'exam') {
                         borderColor = '#9333ea'; bgColor = '#f3e8ff'; textColor = '#6b21a8';
                     } else if (item.type === 'holiday') {
                         borderColor = '#ef4444'; bgColor = '#fef2f2'; textColor = '#991b1b';
                     } else if (item.type === 'other') {
-                        // NEW: Styling for 'Other'
-                        borderColor = '#f59e0b'; bgColor = '#fffbeb'; textColor = '#92400e'; // Amber
+                        // FIXED: Styling for "Other" items so they are visible
+                        borderColor = '#f59e0b'; bgColor = '#fffbeb'; textColor = '#92400e';
                     }
 
                     div.style.borderLeftColor = borderColor;
                     div.style.backgroundColor = bgColor;
                     div.style.color = textColor;
-                    div.innerHTML = `<strong>${item.hours_assigned || 0}h</strong> ${item.units?.title || item.label || 'Item'}`;
+                    div.innerHTML = `<strong>${item.hours_assigned || 0}h</strong> ${displayLabel}`;
                     
                     div.onclick = (e) => { e.stopPropagation(); schedulerManager.openContextMenu(item, e); };
-                    
-                    div.ondragstart = (e) => {
-                        e.dataTransfer.setData('moveId', item.id);
-                        e.dataTransfer.setData('type', 'move');
-                    };
+                    div.ondragstart = (e) => { e.dataTransfer.setData('moveId', item.id); e.dataTransfer.setData('type', 'move'); };
 
                     cell.appendChild(div);
                 });
@@ -1036,70 +1023,22 @@ dragMisc: (e, type) => {
         schedulerManager.renderCalendar();
     },
 
-    handleDrop: async (e, dateStr) => {
-        e.preventDefault();
-        const type = e.dataTransfer.getData('type');
-        
-        if (type === 'move') {
-            const moveId = e.dataTransfer.getData('moveId');
-            await sb.from('schedules').update({ date: dateStr }).eq('id', moveId);
-            schedulerManager.init();
-            return;
-        }
-
-        const modal = document.getElementById('modal-sched-action');
-        const titleEl = document.getElementById('sched-modal-title');
-        const confirmBtn = document.getElementById('btn-sched-confirm');
-        const inputHours = document.getElementById('sched-input-hours');
-        const inputInsert = document.getElementById('sched-input-insert');
-
-        let title = e.dataTransfer.getData('title');
-        let unitId = e.dataTransfer.getData('id');
-
-        // NEW: Ask for name if "Other"
-        if (type === 'other') {
-            const customName = prompt("Enter label for this block:", "Meeting");
-            if (!customName) return; 
-            title = customName;
-        }
-
-        titleEl.innerText = title;
-        modal.classList.remove('hidden');
-        inputHours.value = 6.5; 
-        inputInsert.checked = false;
-
-        // Clone button to remove old listeners
-        const newBtn = confirmBtn.cloneNode(true);
-        confirmBtn.parentNode.replaceChild(newBtn, confirmBtn);
-
-        newBtn.onclick = async () => {
-            const hours = parseFloat(inputHours.value);
-            const isInsert = inputInsert.checked;
-            
-            modal.classList.add('hidden');
-            ui.toast("Scheduling...", "info");
-
-            if (isInsert) await schedulerManager.shiftFutureItems(dateStr, 1);
-
-            await sb.from('schedules').insert([{
-                course_id: state.activeCourse.id,
-                unit_id: type === 'unit' ? parseInt(unitId) : null,
-                type: type, 
-                label: type !== 'unit' ? title : null, // Save the custom name
-                date: dateStr,
-                hours_assigned: hours
-            }]);
-
-            schedulerManager.init();
-        };
-    },
-
     openContextMenu: (item, e) => {
         const menu = document.getElementById('modal-sched-ctx');
         const title = document.getElementById('ctx-item-title');
         const dateEl = document.getElementById('ctx-item-date');
         
-        title.innerText = item.units?.title || item.label || 'Item';
+        let displayLabel = item.label || 'Item';
+        if(item.type === 'unit' && item.unit_id && state.structure) {
+             for(const sec of state.structure) {
+                 for(const mod of (sec.modules||[])) {
+                     const u = mod.units?.find(x => x.id == item.unit_id);
+                     if(u) displayLabel = u.title;
+                 }
+             }
+        }
+
+        title.innerText = displayLabel;
         dateEl.innerText = new Date(item.date).toDateString();
         
         menu.classList.remove('hidden');
@@ -1108,7 +1047,7 @@ dragMisc: (e, type) => {
         document.getElementById('btn-ctx-global-back').onclick = () => schedulerManager.shiftGlobal(item.date, -1);
         document.getElementById('btn-ctx-global-fwd').onclick = () => schedulerManager.shiftGlobal(item.date, 1);
 
-        const modId = item.units?.module_id;
+        const modId = item.type==='unit' ? state.structure.flatMap(s=>s.modules).find(m=>m.units.some(u=>u.id==item.unit_id))?.id : null;
         const modBtns = ['btn-ctx-mod-back', 'btn-ctx-mod-fwd'];
         
         if (modId) {
@@ -1166,9 +1105,12 @@ dragMisc: (e, type) => {
         document.getElementById('modal-sched-ctx').classList.add('hidden');
         ui.toast("Shifting module...", "info");
         
-        const { data: items } = await sb.from('schedules').select('*, units!inner(module_id)')
+        const { data: units } = await sb.from('units').select('id').eq('module_id', moduleId);
+        const unitIds = units.map(u => u.id);
+        
+        const { data: items } = await sb.from('schedules').select('*')
             .eq('course_id', state.activeCourse.id)
-            .eq('units.module_id', moduleId)
+            .in('unit_id', unitIds)
             .gte('date', fromDateStr);
             
         if (!items) return;
