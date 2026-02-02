@@ -370,4 +370,6 @@ function cycleContact(rIdx, cIdx) { const current = tempLadderState[rIdx].contac
 function cycleCoil(rIdx) { const current = tempLadderState[rIdx].coil; const outputs = ['Q1', 'Q2', 'Q3', 'Q4']; if(!current) { tempLadderState[rIdx].coil = { addr: 'Q1' }; } else { const idx = outputs.indexOf(current.addr); if(idx < outputs.length - 1) { current.addr = outputs[idx + 1]; } else { tempLadderState[rIdx].coil = null; } } renderLadderEditor(); }
 function savePLCLogic() { if(!currentPLC || !tempLadderState) return; currentPLC.program = JSON.parse(JSON.stringify(tempLadderState)); closePLCModal(); alert("Logic Uploaded to PLC!"); }
 function handleGlobalDoubleClick(e) { const rect = document.getElementById('simCanvas').getBoundingClientRect(); const x = e.clientX - rect.left; const y = e.clientY - rect.top; const comps = [...Engine.components].reverse(); const clickedComp = comps.find(c => x > c.x && x < c.x + c.w && y > c.y && y < c.y + c.h); if (clickedComp) { if(clickedComp.type === 'plc_mini') { openPLCModal(clickedComp); return; } if (Interaction.mode === 'interact' || Interaction.mode === 'move') { App.openPropertyModal(clickedComp); } } }
+// Expose App to window so HTML buttons can see it
+window.App = App;
 window.onload = App.init;

@@ -814,7 +814,8 @@ const schedulerManager = {
                     <div class="pl-2 space-y-1"></div>
                 `;
                 
-                const unitContainer = details.querySelector('div');
+                // Select the container by class to ensure we don't grab the circle div
+                const unitContainer = details.querySelector('.space-y-1');
 
                 units.forEach(u => {
                     const scheduled = progressMap[u.id] || 0;
