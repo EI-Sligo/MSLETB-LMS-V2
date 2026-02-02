@@ -1,5 +1,5 @@
 // ==========================================
-// 1. CONFIGURATION
+// 1. CONFIGURATION & IMPORTS
 // ==========================================
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_KEY;
@@ -18,7 +18,7 @@ const state = {
 function getIrishHolidays(year) {
     const holidays = [];
 
-    // Helper: If a date is Sat/Sun, move to next Monday
+    // Helper: If a fixed date is Sat/Sun, move to next Monday
     const addObserved = (dateStr) => {
         const d = new Date(dateStr);
         const day = d.getDay(); // 0=Sun, 6=Sat
@@ -188,17 +188,19 @@ const authUI = {
     toggleMode: (mode) => {
         authUI.mode = mode;
         const btn = document.getElementById('btn-auth-submit');
+        const h1 = document.querySelector('#login-view h1');
+        
         if (mode === 'signup') {
             document.getElementById('msg-login').classList.add('hidden');
             document.getElementById('msg-signup').classList.remove('hidden');
-            document.getElementById('auth-title').classList.remove('hidden');
+            if(h1) h1.innerText = "Activate Account";
             btn.innerHTML = `<span>Activate & Login</span> <i class="ph ph-rocket-launch"></i>`;
             btn.classList.replace('bg-teal-600', 'bg-purple-600');
             btn.classList.replace('hover:bg-teal-700', 'hover:bg-purple-700');
         } else {
             document.getElementById('msg-login').classList.remove('hidden');
             document.getElementById('msg-signup').classList.add('hidden');
-            document.getElementById('auth-title').classList.add('hidden');
+            if(h1) h1.innerText = "MSLETB Hub";
             btn.innerHTML = `<span>Sign In</span> <i class="ph ph-sign-in"></i>`;
             btn.classList.replace('bg-purple-600', 'bg-teal-600');
             btn.classList.replace('hover:bg-purple-700', 'hover:bg-teal-700');
@@ -1316,6 +1318,97 @@ const quizManager = {
         const footerBtn = document.querySelector('#modal-take-quiz .border-t button');
         if(footerBtn) { footerBtn.innerText = "Close Results"; footerBtn.className = "px-6 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded font-bold shadow"; footerBtn.onclick = () => quizManager.closeTakeQuiz(); }
     }
+};
+
+const entityModal = {
+    type: null, id: null, parentId: null,
+    
+    openFromEl: (el, type) => {
+        const id = el.dataset.id;
+        const title = el.dataset.title;
+        const desc = el.dataset.desc;
+        const image = el.dataset.image;
+        entityModal.open(type, id, title, desc, image);
+    },
+
+    open: async (type, id = null, title = '', desc = '', image = '', parentId = null) => {
+        entityModal.type = type; entityModal.id = id; entityModal.parentId = parentId;
+        document.getElementById('modal-entity').classList.remove('hidden');
+        document.getElementById('entity-modal-title').innerText = (id ? 'Edit ' : 'New ') + type.charAt(0).toUpperCase() + type.slice(1);
+        document.getElementById('entity-title').value = title;
+        document.getElementById('entity-desc').value = desc;
+        document.getElementById('entity-image-file').value = ''; 
+        document.getElementById('entity-image-url').value = image.startsWith('http') ? image : '';
+        document.getElementById('entity-desc-wrapper').classList.toggle('hidden', type !== 'course');
+        
+        let item = null;
+        if(id) {
+            const { data } = await sb.from(type + 's').select('*').eq('id', id).single();
+            item = data;
+        }
+
+        document.getElementById('entity-visible').checked = item ? (item.is_visible !== false) : true;
+        const hrsWrapper = document.getElementById('entity-hours-wrapper');
+        if(type === 'unit') {
+            hrsWrapper.classList.remove('hidden');
+            document.getElementById('entity-hours').value = item ? (item.total_hours_required || 0) : 0;
+        } else {
+            hrsWrapper.classList.add('hidden');
+        }
+        entityModal.toggleImageSource();
+    },
+    
+    close: () => document.getElementById('modal-entity').classList.add('hidden'),
+    
+    toggleImageSource: () => {
+        const source = document.querySelector('input[name="entity-img-source"]:checked').value;
+        const fileInput = document.getElementById('entity-image-file');
+        const urlInput = document.getElementById('entity-image-url');
+        if (source === 'url') { fileInput.classList.add('hidden'); urlInput.classList.remove('hidden'); } 
+        else { fileInput.classList.remove('hidden'); urlInput.classList.add('hidden'); }
+    },
+
+    save: async () => {
+        const btn = document.getElementById('btn-save-entity'); const originalText = btn.innerText;
+        btn.innerText = '⏳ Saving...'; btn.disabled = true;
+
+        try {
+            const title = document.getElementById('entity-title').value;
+            const desc = document.getElementById('entity-desc').value;
+            const isVisible = document.getElementById('entity-visible').checked;
+            const totalHours = document.getElementById('entity-hours').value;
+            
+            let imageUrl = null;
+            if(document.getElementById('entity-image-url') && !document.getElementById('entity-image-url').classList.contains('hidden')) {
+                 imageUrl = document.getElementById('entity-image-url').value;
+            } else {
+                 const fileInput = document.getElementById('entity-image-file');
+                 if (fileInput && fileInput.files.length > 0) {
+                    const file = fileInput.files[0];
+                    const path = `covers/${Date.now()}_${file.name.replace(/[^a-zA-Z0-9]/g,'_')}`;
+                    await sb.storage.from('course_content').upload(path, file);
+                    const { data } = sb.storage.from('course_content').getPublicUrl(path);
+                    imageUrl = data.publicUrl;
+                 }
+            }
+            
+            if(!title) throw new Error("Title required");
+            const data = { title, is_visible: isVisible };
+            if(entityModal.type === 'course') { data.description = desc; if(imageUrl) data.image_url = imageUrl; }
+            if(entityModal.type === 'unit') data.total_hours_required = totalHours;
+
+            if (entityModal.id) await sb.from(entityModal.type + 's').update(data).eq('id', entityModal.id);
+            else {
+                if (entityModal.type === 'section') data.course_id = state.activeCourse.id;
+                else if (entityModal.type === 'module') data.section_id = entityModal.parentId;
+                await sb.from(entityModal.type + 's').insert([data]);
+            }
+            ui.toast("Saved!", "success"); entityModal.close();
+            if (entityModal.type === 'course') dashboard.loadCourses(); else courseManager.loadSyllabus();
+
+        } catch(e) { console.error(e); ui.toast(e.message, 'error'); } 
+        finally { btn.innerText = originalText; btn.disabled = false; }
+    } 
 };
 
 const contentModal = {
