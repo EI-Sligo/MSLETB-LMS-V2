@@ -347,7 +347,7 @@ const dashboard = {
 // ==========================================
 
 // ==========================================
-// HELPER: RENDER CONTENT ITEM (Restored from Uploaded Version)
+// HELPER: RENDER CONTENT ITEM (Restores Folder View)
 // ==========================================
 function renderContentItem(file, unitId, myWork) {
     let emoji = getContentEmoji(file.type);
@@ -409,34 +409,38 @@ function renderContentItem(file, unitId, myWork) {
     </div>`;
 }
 
+
 // ==========================================
-// 5. COURSE CONTENT MANAGER (Updated with Grouping)
+// 5. COURSE MANAGER (Merged: Grouping + Bulk Edit + Team)
+// ==========================================
+// ==========================================
+// 5. COURSE MANAGER (Merged: Grouping + Bulk Edit + Team)
 // ==========================================
 const courseManager = {
+    // 1. SYLLABUS (With Grouping & Colors)
     loadSyllabus: async () => {
         const list = document.getElementById('syllabus-list');
         list.innerHTML = '<div class="p-4 text-center"><i class="ph ph-spinner animate-spin text-teal-600"></i></div>';
         
-        // Colors for Modules
         const palette = ['#dbeafe', '#d1fae5', '#fef9c3', '#fee2e2', '#f3e8ff', '#ffedd5'];
         
         let query = sb.from('sections').select('*, modules(*, units(*, content(*)))') 
             .eq('course_id', state.activeCourse.id).order('position', { ascending: true });
         
-        // Students only see visible items
         if(!isAdmin()) query = query.eq('is_visible', true);
 
         const { data: sections } = await query;
         list.innerHTML = '';
         state.structure = sections || []; 
 
-        if (!sections || sections.length === 0) { list.innerHTML = '<div class="text-center text-gray-400 p-4 text-sm">No sections yet.</div>'; return; }
+        if (!sections || sections.length === 0) { 
+            list.innerHTML = '<div class="text-center text-gray-400 p-4 text-sm">No sections yet.</div>'; 
+            return; 
+        }
 
         let modIdx = 0;
         sections.forEach(section => {
             let modules = (section.modules || []).sort((a,b) => a.position - b.position);
-            
-            // Assign colors
             modules.forEach(m => { m.color = palette[modIdx % palette.length]; modIdx++; });
 
             const sectionEl = document.createElement('div');
@@ -476,19 +480,39 @@ const courseManager = {
         });
     },
 
+    // 2. OPEN MODULE (With "Bulk Edit" Button & Grouped Content)
     openModule: async (moduleId) => {
         const { data: module } = await sb.from('modules').select('*').eq('id', moduleId).single();
         state.activeModule = module;
         
-        document.getElementById('current-module-title').innerHTML = `<span class="flex items-center gap-2 text-teal-900 font-bold"><i class="ph ph-folder-open"></i> ${module.title}</span>`;
-        if(isAdmin()) document.getElementById('btn-add-unit').classList.remove('hidden');
+        // Header
+        const headerTitle = document.getElementById('current-module-title');
+        headerTitle.innerHTML = `<span class="flex items-center gap-2 text-teal-900 font-bold"><i class="ph ph-folder-open"></i> ${module.title}</span>`;
+        
+        // Inject Bulk Edit & Add Unit Buttons if Admin
+        if(isAdmin()) {
+            document.getElementById('btn-add-unit').classList.remove('hidden');
+            
+            // Add Bulk Edit Button dynamically if missing
+            let bulkBtn = document.getElementById('btn-bulk-edit');
+            if(!bulkBtn) {
+                bulkBtn = document.createElement('button');
+                bulkBtn.id = 'btn-bulk-edit';
+                bulkBtn.className = "text-xs bg-indigo-50 text-indigo-700 px-3 py-1 rounded border border-indigo-200 mr-2 hover:bg-indigo-100 font-bold flex items-center gap-1";
+                bulkBtn.innerHTML = `<i class="ph ph-list-dashes"></i> Bulk Edit`;
+                bulkBtn.onclick = () => courseManager.openBulkEdit(); 
+                
+                const container = document.getElementById('btn-add-unit').parentElement;
+                container.insertBefore(bulkBtn, document.getElementById('btn-add-unit'));
+            }
+        }
 
         const container = document.getElementById('unit-container');
         container.innerHTML = '<div class="text-gray-400 p-8 flex justify-center"><i class="ph ph-spinner animate-spin text-2xl"></i></div>';
         
         const { data: units } = await sb.from('units').select('*, content(*)').eq('module_id', moduleId).order('position', { ascending: true });
         
-        // Fetch student work status
+        // Check student work
         let myWork = {};
         if(!isAdmin()) {
             const { data: subs } = await sb.from('assignments').select('content_id').eq('student_id', state.user.id);
@@ -498,7 +522,10 @@ const courseManager = {
         }
 
         container.innerHTML = '';
-        if (!units || units.length === 0) { container.innerHTML = '<div class="flex flex-col items-center justify-center h-64 text-gray-400"><i class="ph ph-tray text-4xl mb-2"></i><p>This module is empty.</p></div>'; return; }
+        if (!units || units.length === 0) { 
+            container.innerHTML = '<div class="flex flex-col items-center justify-center h-64 text-gray-400"><i class="ph ph-tray text-4xl mb-2"></i><p>This module is empty.</p></div>'; 
+            return; 
+        }
 
         units.forEach((unit, index) => {
             const isOpen = index === 0;
@@ -515,19 +542,16 @@ const courseManager = {
             `;
             
             const contentContainer = unitEl.querySelector(`#acc-content-unit-${unit.id}`);
-            if(unit.content && !isAdmin()) unit.content = unit.content.filter(c => c.is_visible); // Filter for students
+            if(unit.content && !isAdmin()) unit.content = unit.content.filter(c => c.is_visible);
 
+            // GROUPING LOGIC (Restored)
             if(unit.content && unit.content.length > 0) {
                 unit.content.sort((a,b) => a.position - b.position);
-                
-                // --- GROUPING LOGIC (The "Better" Part) ---
                 const groups = { video: [], file: [], audio: [], simulator: [], assignment: [], quiz: [], url: [] };
-                // Group items. Default to 'file' if unknown
                 unit.content.forEach(item => { if(groups[item.type]) groups[item.type].push(item); else groups['file'].push(item); });
 
                 Object.keys(groups).forEach(type => {
                     if(groups[type].length === 0) return;
-                    
                     const groupTitle = type.charAt(0).toUpperCase() + type.slice(1);
                     const groupIcon = getContentEmoji(type); 
 
@@ -547,20 +571,127 @@ const courseManager = {
         });
     },
 
-    // Simplified Bulk Create (Prompt based)
-    bulkCreate: async (type, parentId) => {
-        const t = prompt(`Enter ${type} title:`);
-        if(!t) return;
-        
-        const payload = { title: t, is_visible: true };
-        if(type === 'section') payload.course_id = state.activeCourse.id;
-        else if(type === 'module') payload.section_id = parentId;
-        
-        await sb.from(type + 's').insert([payload]);
-        courseManager.loadSyllabus();
+    // 3. BULK EDIT (Restored from Original Code)
+    openBulkEdit: async () => {
+        const { data: sections } = await sb.from('sections')
+            .select('id, title, position, modules(id, title, position, units(id, title, total_hours_required, position))')
+            .eq('course_id', state.activeCourse.id).order('position', { ascending: true });
+
+        let rows = [];
+        sections?.forEach(sec => {
+            rows.push({ type: 'section', id: sec.id, title: sec.title, indent: 0 });
+            rows.push({ type: 'btn-module', parentId: sec.id, indent: 1 }); 
+
+            sec.modules?.sort((a,b)=>a.position-b.position).forEach(mod => {
+                rows.push({ type: 'module', id: mod.id, title: mod.title, indent: 1 });
+                rows.push({ type: 'btn-unit', parentId: mod.id, indent: 2 }); 
+
+                mod.units?.sort((a,b)=>a.position-b.position).forEach(unit => {
+                    rows.push({ type: 'unit', id: unit.id, title: unit.title, hours: unit.total_hours_required, indent: 2 });
+                });
+            });
+        });
+        rows.push({ type: 'btn-section', indent: 0 });
+
+        const modal = document.createElement('div');
+        modal.className = "fixed inset-0 bg-black/50 z-[70] flex items-center justify-center p-8 fade-in";
+        modal.innerHTML = `
+            <div class="bg-white rounded-xl shadow-2xl w-full max-w-5xl h-[85vh] flex flex-col">
+                <div class="p-4 border-b flex justify-between items-center bg-gray-50 rounded-t-xl">
+                    <h3 class="font-bold text-lg">Bulk Edit: ${state.activeCourse.title}</h3>
+                    <button onclick="this.closest('.fixed').remove(); courseManager.loadSyllabus();" class="text-gray-500 hover:text-red-500"><i class="ph ph-x text-xl"></i></button>
+                </div>
+                <div class="flex-1 overflow-y-auto p-0">
+                    <table class="w-full text-sm text-left">
+                        <thead class="bg-gray-100 text-gray-600 sticky top-0 z-10 shadow-sm">
+                            <tr><th class="p-3 w-24 pl-6">Type</th><th class="p-3">Title</th><th class="p-3 w-32">Hours</th></tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-100">
+                            ${rows.map(row => {
+                                if(row.type.startsWith('btn-')) {
+                                    const itemType = row.type.replace('btn-', '');
+                                    return `<tr class="bg-slate-50 hover:bg-slate-100"><td></td><td class="p-2"><button onclick="courseManager.bulkCreate('${itemType}', ${row.parentId || 0})" style="margin-left: ${row.indent * 1.5}rem" class="text-xs text-teal-600 hover:text-teal-800 font-bold flex items-center gap-1 px-2 py-1 rounded hover:bg-teal-50 border border-transparent hover:border-teal-200 transition"><i class="ph ph-plus-circle"></i> Add ${itemType.charAt(0).toUpperCase() + itemType.slice(1)}</button></td><td></td></tr>`;
+                                }
+                                const isUnit = row.type === 'unit';
+                                const typeLabel = row.type.charAt(0).toUpperCase() + row.type.slice(1);
+                                const typeColor = row.type === 'section' ? 'bg-gray-200 text-gray-800' : (row.type === 'module' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800');
+                                const table = row.type + 's'; 
+                                return `<tr class="${row.type === 'section' ? 'bg-gray-50' : 'bg-white'} hover:bg-slate-50 transition border-b border-gray-100">
+                                    <td class="p-2 pl-4 align-middle"><span class="text-[10px] font-bold ${typeColor} px-2 py-1 rounded uppercase tracking-wider">${typeLabel}</span></td>
+                                    <td class="p-2"><div style="padding-left: ${row.indent * 1.5}rem" class="relative flex items-center">${row.indent > 0 ? `<div class="absolute left-0 top-1/2 -translate-y-1/2 w-[${row.indent * 1.5}rem] h-px bg-gray-300"></div>` : ''}<input type="text" class="w-full bg-transparent border-b border-transparent hover:border-gray-300 focus:border-teal-500 focus:outline-none py-1 px-2 font-medium text-gray-700" value="${row.title}" onchange="courseManager.updateEntity('${table}', ${row.id}, 'title', this.value)"></div></td>
+                                    <td class="p-2">${isUnit ? `<div class="flex items-center gap-1"><input type="number" step="0.5" class="border p-1 rounded w-20 text-center bg-white focus:ring-2 focus:ring-teal-500 outline-none" value="${row.hours || 0}" onchange="courseManager.updateEntity('units', ${row.id}, 'total_hours_required', this.value)"><span class="text-xs text-gray-400">h</span></div>` : ''}</td>
+                                </tr>`;
+                            }).join('')}
+                        </tbody>
+                    </table>
+                </div>
+                <div class="p-4 border-t bg-gray-50 flex justify-end">
+                    <button onclick="this.closest('.fixed').remove(); courseManager.loadSyllabus();" class="bg-teal-600 text-white px-6 py-2 rounded shadow hover:bg-teal-700 font-bold">Done & Refresh</button>
+                </div>
+            </div>`;
+        document.body.appendChild(modal);
     },
 
-    // --- UTILITIES (Move/Edit/Delete/Launch) ---
+    bulkCreate: async (type, parentId) => {
+        const title = prompt(`Enter ${type} title:`);
+        if(!title) return;
+        const payload = { title, is_visible: true };
+        if(type === 'section') payload.course_id = state.activeCourse.id;
+        else if(type === 'module') payload.section_id = parentId;
+        else if(type === 'unit') { payload.module_id = parentId; payload.total_hours_required = 0; }
+        
+        await sb.from(type + 's').insert([payload]);
+        const modal = document.querySelector('.fixed.z-\\[70\\]');
+        if(modal) { modal.remove(); courseManager.openBulkEdit(); }
+        else { courseManager.loadSyllabus(); }
+    },
+
+    updateEntity: async (table, id, field, value) => { await sb.from(table).update({ [field]: value }).eq('id', id); },
+
+    // 4. TEAM MANAGEMENT (Restored to fix "I.loadTeam error")
+    loadTeam: async () => {
+        const el = document.getElementById('tab-team');
+        el.innerHTML = '<p class="p-4">Loading roster...</p>';
+        const { data: roster } = await sb.from('enrollments').select('*, profiles(email)').eq('course_id', state.activeCourse.id);
+        const { data: invites } = await sb.from('invitations').select('*').eq('course_id', state.activeCourse.id);
+        
+        let html = `<div class="flex justify-between mb-6 items-end"><h2 class="text-xl font-bold text-gray-800">Class Roster</h2>
+            <div class="flex gap-2 items-center bg-gray-50 p-2 rounded border border-gray-200">
+                <select id="role-in" class="border border-gray-300 p-1.5 rounded text-sm bg-white focus:ring-2 focus:ring-teal-500 outline-none"><option value="student">Student</option><option value="instructor">Instructor</option></select>
+                <input id="email-in" placeholder="Email Address" class="border border-gray-300 p-1.5 rounded text-sm w-64 focus:ring-2 focus:ring-teal-500 outline-none">
+                <button onclick="courseManager.enroll()" class="bg-teal-600 text-white px-4 py-1.5 rounded text-sm font-bold shadow-sm hover:bg-teal-700">+ Invite</button>
+            </div>
+        </div>`;
+        
+        html += `<div class="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm"><table class="w-full text-sm text-left"><thead class="bg-gray-50 text-gray-500 uppercase font-semibold border-b border-gray-200"><tr><th class="p-4">Email</th><th class="p-4">Role</th><th class="p-4">Status</th><th class="p-4"></th></tr></thead><tbody class="divide-y divide-gray-100">`;
+        
+        invites?.forEach(i => html += `<tr class="bg-yellow-50"><td class="p-4 font-medium text-gray-700">${i.email}</td><td class="p-4 uppercase text-xs font-bold">${i.role}</td><td class="p-4"><span class="bg-yellow-100 text-yellow-700 px-2 py-1 rounded text-xs font-bold">Pending</span></td><td class="p-4 text-right"><button onclick="courseManager.delInvite(${i.id})" class="text-red-400 hover:text-red-600 p-1"><i class="ph ph-x-circle text-xl"></i></button></td></tr>`);
+        roster?.forEach(m => html += `<tr class="hover:bg-gray-50"><td class="p-4 font-medium text-gray-800">${m.profiles?.email || 'Unknown'}</td><td class="p-4"><span class="px-2 py-1 rounded text-xs font-bold ${m.course_role==='instructor'?'bg-purple-100 text-purple-700':'bg-blue-100 text-blue-700'}">${m.course_role.toUpperCase()}</span></td><td class="p-4"><span class="bg-green-100 text-green-700 px-2 py-1 rounded text-xs font-bold">Active</span></td><td class="p-4 text-right">${isAdmin() && m.user_id !== state.user.id ? `<button onclick="courseManager.delUser('${m.user_id}')" class="text-gray-400 hover:text-red-600 p-1"><i class="ph ph-trash text-lg"></i></button>` : ''}</td></tr>`);
+        html += `</tbody></table></div>`; el.innerHTML = html;
+    },
+
+    enroll: async () => {
+        const email = document.getElementById('email-in').value; const role = document.getElementById('role-in').value;
+        if(!email) return ui.toast("Enter email", "error");
+        
+        const { data: u } = await sb.from('profiles').select('id').eq('email', email).maybeSingle();
+        if(u) { await sb.from('enrollments').insert([{course_id:state.activeCourse.id, user_id:u.id, course_role:role}]); ui.toast("User Enrolled!", "success"); }
+        else { await sb.from('invitations').insert([{course_id:state.activeCourse.id, email, role, invited_by:state.user.id}]); ui.toast("Invite Sent!", "success"); }
+        courseManager.loadTeam();
+    },
+    delInvite: async (id) => { if(confirm("Cancel invite?")) { await sb.from('invitations').delete().eq('id', id); courseManager.loadTeam(); }},
+    delUser: async (uid) => { if(confirm("Remove user from course?")) { await sb.from('enrollments').delete().eq('course_id', state.activeCourse.id).eq('user_id', uid); courseManager.loadTeam(); }},
+
+    // 5. STANDARD CONTENT UTILS
+    addUnit: async () => { if(!state.activeModule) return; const t = prompt("Unit Title:"); if(t) { await sb.from('units').insert([{ module_id: state.activeModule.id, title: t }]); courseManager.openModule(state.activeModule.id); }},
+    addContent: (unitId) => contentModal.open(unitId),
+    deleteItem: async (table, id) => { if(confirm("Delete this item?")) { await sb.from(table).delete().eq('id', id); if(table==='units'||table==='content') courseManager.openModule(state.activeModule.id); else courseManager.loadSyllabus(); } },
+    editItem: async (table, id, currentTitle) => {
+        const t = prompt(`Rename ${table}:`, currentTitle);
+        if(!t) return;
+        await sb.from(table).update({ title: t }).eq('id', id);
+        if(table === 'sections' || table === 'modules') courseManager.loadSyllabus(); else courseManager.openModule(state.activeModule.id);
+    },
     moveItem: async (table, id, direction) => {
         let query = sb.from(table).select('id, position');
         if (table === 'sections') query = query.eq('course_id', state.activeCourse.id);
@@ -585,47 +716,20 @@ const courseManager = {
         if (table === 'units' || table === 'content') courseManager.openModule(state.activeModule.id); else courseManager.loadSyllabus();
     },
 
-    editItem: async (table, id, currentTitle) => {
-        const t = prompt(`Rename ${table}:`, currentTitle);
-        if(!t) return;
-        await sb.from(table).update({ title: t }).eq('id', id);
-        if(table === 'sections' || table === 'modules') courseManager.loadSyllabus(); else courseManager.openModule(state.activeModule.id);
-    },
-
-    deleteItem: async (table, id) => { 
-        if(confirm("Delete this item?")) { 
-            await sb.from(table).delete().eq('id', id); 
-            if(table==='units'||table==='content') courseManager.openModule(state.activeModule.id); 
-            else courseManager.loadSyllabus(); 
-        } 
-    },
-
-    addContent: (unitId) => contentModal.open(unitId),
-    addUnit: async () => { if(!state.activeModule) return; const t = prompt("Unit Title:"); if(t) { await sb.from('units').insert([{ module_id: state.activeModule.id, title: t }]); courseManager.openModule(state.activeModule.id); }},
-
-    // Keep the new robust Launcher & Viewer
+    // 6. LAUNCHER & VIEWER
     launchContent: async (id, type, url) => {
         const { data: content } = await sb.from('content').select('allow_download').eq('id', id).single();
         const allowDl = content ? content.allow_download : false;
         sb.from('activity_logs').insert([{ user_id: state.user.id, content_id: id, action_type: 'viewed' }]).then(()=>{});
-        
         const canDownload = isAdmin() || allowDl; 
 
-        if(type === 'simulator') {
-            const cleanUrl = url.split('?')[0]; 
-            window.open(`${cleanUrl}?auth=msletb_secure_launch&uid=${state.user.id}&cid=${id}`, '_blank');
-        }
-        else if (type === 'audio') { 
-            const m = document.getElementById('modal-audio');
-            const p = document.getElementById('audio-player');
-            if(m && p) { p.src = url; m.classList.remove('hidden'); if(!canDownload) p.setAttribute('controlsList', 'nodownload'); else p.removeAttribute('controlsList'); }
-        }
+        if(type === 'simulator') { const cleanUrl = url.split('?')[0]; window.open(`${cleanUrl}?auth=msletb_secure_launch&uid=${state.user.id}&cid=${id}`, '_blank'); }
+        else if (type === 'audio') { const m = document.getElementById('modal-audio'); const p = document.getElementById('audio-player'); if(m && p) { p.src = url; m.classList.remove('hidden'); if(!canDownload) p.setAttribute('controlsList', 'nodownload'); else p.removeAttribute('controlsList'); } }
         else if (type === 'file' || type === 'video') { courseManager.openViewer(url, type, canDownload); }
         else if (type === 'assignment') { isAdmin() ? assignmentManager.openGrading(id) : assignmentManager.openSubmit(id); }
         else if (type === 'quiz') { isAdmin() ? alert("Admins cannot take quizzes.") : quizManager.takeQuiz(id); }
         else if (url) { window.open(url, '_blank'); }
     },
-
     openViewer: (url, type, canDownload) => {
         const modal = document.getElementById('modal-viewer');
         const body = document.getElementById('viewer-body');
@@ -640,15 +744,9 @@ const courseManager = {
             let videoId = url.split('v=')[1]?.split('&')[0] || url.split('youtu.be/')[1]?.split('?')[0];
             if(videoId) body.innerHTML = `<iframe src="https://www.youtube.com/embed/${videoId}" class="w-full h-full border-0" allowfullscreen></iframe>`;
         }
-        else if (type === 'video' || ['mp4', 'webm'].includes(ext)) {
-            body.innerHTML = `<video src="${url}" ${canDownload?'controls':'controls controlsList="nodownload"'} class="max-h-full max-w-full shadow-lg rounded"></video>`;
-        } 
-        else if (['pdf', 'jpg', 'png'].includes(ext)) {
-            body.innerHTML = `<iframe src="${url}#toolbar=0" class="w-full h-full border-0 bg-white"></iframe>`;
-        } 
-        else {
-            body.innerHTML = `<div class="text-white text-center p-8"><p class="text-xl">Preview not available.</p>${canDownload ? `<a href="${url}" target="_blank" class="text-teal-400 underline">Download</a>` : ''}</div>`;
-        }
+        else if (type === 'video' || ['mp4', 'webm'].includes(ext)) { body.innerHTML = `<video src="${url}" ${canDownload?'controls':'controls controlsList="nodownload"'} class="max-h-full max-w-full shadow-lg rounded"></video>`; } 
+        else if (['pdf', 'jpg', 'png'].includes(ext)) { body.innerHTML = `<iframe src="${url}#toolbar=0" class="w-full h-full border-0 bg-white"></iframe>`; } 
+        else { body.innerHTML = `<div class="text-white text-center p-8"><p class="text-xl">Preview not available.</p>${canDownload ? `<a href="${url}" target="_blank" class="text-teal-400 underline">Download</a>` : ''}</div>`; }
     },
     closeViewer: () => { document.getElementById('modal-viewer').classList.add('hidden'); document.getElementById('viewer-body').innerHTML=''; },
     closeAudio: () => { const m = document.getElementById('modal-audio'); if(m) m.classList.add('hidden'); document.getElementById('audio-player')?.pause(); }
