@@ -16,22 +16,38 @@ const state = {
 // 2. HELPER FUNCTIONS
 // ==========================================
 function getIrishHolidays(year) {
-    const holidays = [
-        `${year}-01-01`, // New Year's
-        `${year}-03-17`, // St Patrick's
-        `${year}-12-25`, // Christmas
-        `${year}-12-26`  // St Stephen's
-    ];
+    const holidays = [];
 
-    // St Brigid's (First Mon in Feb, or 1st if Friday)
+    // Helper: If a date is Sat/Sun, move to next Monday
+    const addObserved = (dateStr) => {
+        const d = new Date(dateStr);
+        const day = d.getDay(); // 0=Sun, 6=Sat
+        if (day === 0) { // Sunday -> Monday
+            d.setDate(d.getDate() + 1);
+            holidays.push(d.toISOString().split('T')[0]);
+        } else if (day === 6) { // Saturday -> Monday
+            d.setDate(d.getDate() + 2);
+            holidays.push(d.toISOString().split('T')[0]);
+        } else {
+            holidays.push(dateStr);
+        }
+    };
+
+    // 1. Fixed Dates (Move to Monday if weekend)
+    addObserved(`${year}-01-01`); // New Year's
+    addObserved(`${year}-03-17`); // St Patrick's Day
+    addObserved(`${year}-12-25`); // Christmas
+    addObserved(`${year}-12-26`); // St Stephen's
+
+    // 2. St Brigid's Day (First Mon in Feb, unless Feb 1st is Friday)
     let feb1 = new Date(year, 1, 1);
-    if (feb1.getDay() === 5) holidays.push(`${year}-02-01`);
+    if (feb1.getDay() === 5) holidays.push(`${year}-02-01`); // It's a Friday
     else {
-        while (feb1.getDay() !== 1) feb1.setDate(feb1.getDate() + 1);
+        while (feb1.getDay() !== 1) feb1.setDate(feb1.getDate() + 1); // Find first Mon
         holidays.push(feb1.toISOString().split('T')[0]);
     }
 
-    // Easter Logic
+    // 3. Easter (Good Friday & Easter Monday)
     const f = Math.floor, y = year;
     const G = y % 19, C = f(y / 100), H = (C - f(C / 4) - f((8 * C + 13) / 25) + 19 * G + 15) % 30;
     const I = H - f(H / 28) * (1 - f(29 / (H + 1)) * f((21 - G) / 11));
@@ -41,20 +57,20 @@ function getIrishHolidays(year) {
     const day = L + 28 - 31 * f(month / 4);
     const easterSunday = new Date(year, month - 1, day);
     
-    // Good Friday & Easter Monday
     const goodFriday = new Date(easterSunday); goodFriday.setDate(easterSunday.getDate() - 2);
     const easterMon = new Date(easterSunday); easterMon.setDate(easterSunday.getDate() + 1);
     holidays.push(goodFriday.toISOString().split('T')[0]);
     holidays.push(easterMon.toISOString().split('T')[0]);
 
-    // Bank Holidays
+    // 4. Bank Holidays (First Monday of May, June, August)
     [4, 5, 7].forEach(m => { 
         let d = new Date(year, m, 1);
         while (d.getDay() !== 1) d.setDate(d.getDate() + 1);
         holidays.push(d.toISOString().split('T')[0]);
     });
     
-    let oct = new Date(year, 10, 0); 
+    // 5. October Bank Holiday (Last Monday)
+    let oct = new Date(year, 10, 0); // Oct 31st
     while (oct.getDay() !== 1) oct.setDate(oct.getDate() - 1);
     holidays.push(oct.toISOString().split('T')[0]);
 
@@ -1405,7 +1421,8 @@ const contentModal = {
 // ==========================================
 // 7. INITIALIZATION
 // ==========================================
-// Expose functions for HTML access
+
+// 1. EXPOSE TO WINDOW (Critical for HTML onclicks)
 window.auth = auth;
 window.authUI = authUI;
 window.app = app;
@@ -1418,19 +1435,38 @@ window.assignmentManager = assignmentManager;
 window.quizManager = quizManager;
 window.schedulerManager = schedulerManager;
 
+// 2. DOM LISTENERS
 document.addEventListener('DOMContentLoaded', () => {
-    document.getElementById('auth-form')?.addEventListener('submit', (e) => {
-        e.preventDefault();
-        const email = document.getElementById('email').value;
-        const pass = document.getElementById('password').value;
-        if (authUI.mode === 'login') auth.signIn(email, pass);
-        else {
-            ui.toast("Activating...", "info");
-            sb.auth.signUp({ email, password: pass }).then(({error}) => {
-                ui.toast(error ? error.message : "Activated!", error ? "error" : "success");
-                if(!error) setTimeout(() => window.location.reload(), 1500);
-            });
-        }
-    });
-    auth.init();
+    
+    // Login Form Logic
+    const authForm = document.getElementById('auth-form');
+    if (authForm) {
+        authForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const email = document.getElementById('email').value;
+            const pass = document.getElementById('password').value;
+            
+            // Use window reference to be 100% sure it exists
+            if (window.authUI && window.authUI.mode === 'login') {
+                window.auth.signIn(email, pass);
+            } else {
+                ui.toast("Activating...", "info");
+                sb.auth.signUp({ email, password: pass }).then(({ error }) => {
+                    ui.toast(error ? error.message : "Activated!", error ? "error" : "success");
+                    if (!error) setTimeout(() => window.location.reload(), 1500);
+                });
+            }
+        });
+    }
+
+    // Add Section Button (Safe Listener)
+    const btnAddSec = document.getElementById('btn-add-section');
+    if (btnAddSec) {
+        btnAddSec.addEventListener('click', () => {
+            if (window.entityModal) window.entityModal.open('section');
+        });
+    }
+
+    // Start App
+    if(window.auth) window.auth.init();
 });
