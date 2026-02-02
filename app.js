@@ -109,60 +109,6 @@ function getGradeInfo(score, total) {
     return { pct, label, color };
 }
 
-function renderContentItem(file, unitId, myWork) {
-    let emoji = getContentEmoji(file.type);
-    let actionHtml = '';
-    let descHtml = '';
-
-    if (file.data) {
-        if (file.data.description) descHtml = `<div class="text-sm text-gray-600 mt-2 ml-12 bg-white p-3 rounded border border-gray-200 shadow-sm">${file.data.description}</div>`;
-        if (file.data.dueDate) descHtml += `<div class="ml-12 mt-1 text-xs font-bold text-red-600 flex items-center gap-1"><i class="ph ph-calendar-warning"></i> Due: ${new Date(file.data.dueDate).toLocaleDateString()}</div>`;
-    }
-
-    if(file.type === 'assignment') {
-        if(file.file_url) descHtml += `<div class="ml-12 mt-2"><a href="${file.file_url}" target="_blank" class="text-xs text-blue-600 hover:underline flex items-center gap-1 font-medium"><i class="ph ph-file-arrow-down"></i> Download Brief</a></div>`;
-        if (isAdmin()) actionHtml = `<button onclick="event.stopPropagation(); assignmentManager.openGrading(${file.id})" class="text-xs bg-indigo-100 text-indigo-700 px-3 py-1 rounded border border-indigo-200 hover:bg-indigo-200 font-bold">Grade</button>`;
-        else {
-            const status = myWork[file.id] || 'Upload Work';
-            const btnColor = status === 'Submitted' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-blue-600 text-white border-blue-600 hover:bg-blue-700 shadow-sm';
-            actionHtml = `<button onclick="event.stopPropagation(); assignmentManager.openSubmit(${file.id})" class="text-xs px-3 py-1 rounded border ${btnColor} font-medium">${status}</button>`;
-        }
-    } else if (file.type === 'quiz') {
-        if (isAdmin()) actionHtml = `<span class="text-xs bg-gray-200 text-gray-700 px-2 py-1 rounded">Quiz</span>`;
-        else {
-            const status = myWork[file.id] ? 'Retake Quiz' : 'Take Quiz';
-            actionHtml = `<button onclick="event.stopPropagation(); quizManager.takeQuiz(${file.id})" class="text-xs px-3 py-1 rounded bg-purple-600 text-white hover:bg-purple-700 shadow-sm font-medium">${status}</button>`;
-        }
-    }
-    
-    // JSON Stringify for editing
-    const safeFile = JSON.stringify(file).replace(/'/g, "&#39;").replace(/"/g, "&quot;");
-
-    return `
-    <div class="bg-white p-2 rounded-lg border border-gray-200 hover:shadow-md transition group">
-        <div class="flex items-center justify-between">
-            <div class="flex items-center gap-3 cursor-pointer flex-1" onclick="courseManager.launchContent(${file.id}, '${file.type}', '${file.file_url}')">
-                <div class="h-8 w-8 flex items-center justify-center text-2xl grayscale group-hover:grayscale-0 transition-all">
-                    ${emoji}
-                </div>
-                <span class="font-medium text-sm text-gray-800 group-hover:text-teal-700 transition">
-                    ${file.title}
-                    ${!file.is_visible ? '<i class="ph ph-eye-slash text-red-400 text-xs ml-1"></i>' : ''}
-                </span>
-            </div>
-            <div class="flex items-center gap-3">
-                ${actionHtml}
-                ${isAdmin() ? `
-                    <div class="hidden group-hover:flex gap-1">
-                        <button onclick='contentModal.open(${unitId}, ${safeFile})' class="text-gray-400 hover:text-blue-500"><i class="ph ph-pencil-simple"></i></button>
-                        <button onclick="courseManager.deleteItem('content', ${file.id})" class="text-gray-400 hover:text-red-500"><i class="ph ph-trash"></i></button>
-                    </div>
-                ` : ''}
-            </div>
-        </div>
-        ${descHtml}
-    </div>`;
-}
 
 // ==========================================
 // 3. AUTH & UI LOGIC
