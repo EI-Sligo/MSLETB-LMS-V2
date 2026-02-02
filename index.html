@@ -163,6 +163,7 @@
 
                 <div id="tab-team" class="hidden flex-1 bg-white rounded-xl shadow p-6 overflow-y-auto">Loading...</div>
                 
+<<<<<<< HEAD
                 <div id="tab-schedule" class="hidden flex-1 flex flex-col md:flex-row gap-4 h-full overflow-hidden">
     <div class="w-full md:w-1/4 bg-white rounded-xl border border-gray-200 flex flex-col overflow-hidden shadow-sm">
         <div class="p-4 bg-gray-50 border-b font-bold text-gray-700 flex justify-between items-center">
@@ -171,6 +172,46 @@
         </div>
         <div id="scheduler-sidebar" class="flex-1 overflow-y-auto p-3 space-y-2 bg-slate-50"></div>
     </div>
+=======
+                <div id="tab-schedule" class="hidden flex-1 flex flex-col md:flex-row gap-4 overflow-hidden h-full">
+                    <div class="w-full md:w-1/4 h-1/3 md:h-auto bg-white rounded-xl shadow border border-gray-200 flex flex-col order-2 md:order-1">
+                        <div class="p-4 border-b bg-gray-50 font-bold text-gray-700 flex justify-between items-center">
+                            <span>Planning Queue</span>
+                            <span class="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">Drag Units</span>
+<<<<<<< HEAD
+                        </div>
+                        <div id="scheduler-sidebar" class="flex-1 overflow-y-auto p-3 space-y-2 bg-gray-50"></div>
+                    </div>
+
+                    <div id="calCont" class="flex-1 bg-white rounded-xl shadow border border-gray-200 flex flex-col overflow-hidden order-1 md:order-2 relative"></div>
+                </div>
+
+                <div id="tab-reports" class="hidden flex-1 bg-white rounded-xl shadow p-6 overflow-y-auto">Loading...</div>
+            </div>
+        </main>
+    </div>
+
+   
+
+                    <div class="flex-1 bg-white rounded-xl shadow border border-gray-200 flex flex-col p-4 overflow-hidden">
+                        <div class="flex justify-between items-center mb-4">
+                            <h2 class="text-xl font-bold text-gray-800 flex items-center gap-2">
+                                <i class="ph ph-calendar-blank text-teal-600"></i>
+                                <span id="cal-month-title">Calendar</span>
+                            </h2>
+                            <div class="flex gap-2">
+                                <button onclick="schedulerManager.changeMonth(-1)" class="p-2 bg-gray-100 rounded hover:bg-gray-200 text-gray-600"><i class="fa-solid fa-chevron-left"></i></button>
+                                <button onclick="schedulerManager.changeMonth(1)" class="p-2 bg-gray-100 rounded hover:bg-gray-200 text-gray-600"><i class="fa-solid fa-chevron-right"></i></button>
+                            <button onclick="schedulerManager.shiftSchedule()" class="text-xs bg-orange-100 text-orange-700 px-3 py-1 rounded border border-orange-200 ml-4 hover:bg-orange-200">
+    <i class="fa-solid fa-clock-rotate-left"></i> Shift Dates
+</button>
+                            </div>
+=======
+>>>>>>> 260a500d4f5db65d71068396504d73d872e4a67a
+                        </div>
+                        <div id="scheduler-sidebar" class="flex-1 overflow-y-auto p-3 space-y-2 bg-gray-50"></div>
+                    </div>
+>>>>>>> 577301c019e4bdfd24661a165b3accbff62515b0
 
     <div id="calCont" class="flex-1 bg-white rounded-xl border border-gray-200 flex flex-col overflow-hidden shadow-sm relative">
         </div>
