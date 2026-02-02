@@ -41,6 +41,7 @@ function getIrishHolidays(year) {
     const day = L + 28 - 31 * f(month / 4);
     const easterSunday = new Date(year, month - 1, day);
     
+    // Good Friday & Easter Monday
     const goodFriday = new Date(easterSunday); goodFriday.setDate(easterSunday.getDate() - 2);
     const easterMon = new Date(easterSunday); easterMon.setDate(easterSunday.getDate() + 1);
     holidays.push(goodFriday.toISOString().split('T')[0]);
@@ -166,6 +167,29 @@ const auth = {
     signOut: async () => { await sb.auth.signOut(); }
 };
 
+const authUI = {
+    mode: 'login', 
+    toggleMode: (mode) => {
+        authUI.mode = mode;
+        const btn = document.getElementById('btn-auth-submit');
+        if (mode === 'signup') {
+            document.getElementById('msg-login').classList.add('hidden');
+            document.getElementById('msg-signup').classList.remove('hidden');
+            document.getElementById('auth-title').classList.remove('hidden');
+            btn.innerHTML = `<span>Activate & Login</span> <i class="ph ph-rocket-launch"></i>`;
+            btn.classList.replace('bg-teal-600', 'bg-purple-600');
+            btn.classList.replace('hover:bg-teal-700', 'hover:bg-purple-700');
+        } else {
+            document.getElementById('msg-login').classList.remove('hidden');
+            document.getElementById('msg-signup').classList.add('hidden');
+            document.getElementById('auth-title').classList.add('hidden');
+            btn.innerHTML = `<span>Sign In</span> <i class="ph ph-sign-in"></i>`;
+            btn.classList.replace('bg-purple-600', 'bg-teal-600');
+            btn.classList.replace('hover:bg-purple-700', 'hover:bg-teal-700');
+        }
+    }
+};
+
 const app = {
     showLogin: () => { document.getElementById('login-view').classList.remove('hidden'); document.getElementById('app-view').classList.add('hidden'); },
     showApp: () => { document.getElementById('login-view').classList.add('hidden'); document.getElementById('app-view').classList.remove('hidden'); dashboard.loadCourses(); },
@@ -175,7 +199,8 @@ const app = {
 const ui = {
     toast: (msg, type = 'info') => {
         let bg = type === 'error' ? "#ef4444" : (type === 'success' ? "#10b981" : "#3b82f6");
-        Toastify({ text: msg, duration: 3000, style: { background: bg, borderRadius: "8px" } }).showToast();
+        if(typeof Toastify !== 'undefined') Toastify({ text: msg, duration: 3000, style: { background: bg, borderRadius: "8px" } }).showToast();
+        else alert(msg);
     },
     switchTab: (t) => {
         ['content', 'team', 'reports', 'schedule'].forEach(x => {
