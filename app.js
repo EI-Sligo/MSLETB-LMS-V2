@@ -772,6 +772,9 @@ const courseManager = {
 // ==========================================
 // 5. SCHEDULER MANAGER
 // ==========================================
+// ==========================================
+// 5. SCHEDULER MANAGER (Fixed: Auto-Refresh Units)
+// ==========================================
 const schedulerManager = {
     currentDate: new Date(),
     schedules: [],
@@ -781,17 +784,21 @@ const schedulerManager = {
              const btn = document.getElementById('tab-btn-schedule');
              if(btn) btn.classList.remove('hidden');
         }
-        if(!state.structure || !state.structure.length) await courseManager.loadSyllabus(true);
+        
+        // FIX: Always reload structure so new Units/Modules appear immediately
+        await courseManager.loadSyllabus(true);
+        
         await schedulerManager.fetchData();
         schedulerManager.renderSidebar();
         schedulerManager.renderCalendar();
     },
 
     fetchData: async () => {
-        // FIX: Select only specific columns to prevent 400 Error (Removed the join)
-        const { data } = await sb.from('schedules')
+        const { data, error } = await sb.from('schedules')
             .select('*')
             .eq('course_id', state.activeCourse.id);
+            
+        if(error) console.error("Schedule Error:", error);
         schedulerManager.schedules = data || [];
     },
 
@@ -803,8 +810,8 @@ const schedulerManager = {
         const map = {};
         schedulerManager.schedules.forEach(s => { if(s.unit_id) map[s.unit_id] = (map[s.unit_id]||0) + s.hours_assigned; });
 
-        state.structure.forEach(sec => {
-            const modules = sec.modules?.sort((a,b)=>a.position-b.position) || [];
+        state.structure.forEach(section => {
+            const modules = section.modules?.sort((a,b)=>a.position-b.position) || [];
             modules.forEach(mod => {
                 if(!mod.units?.length) return;
                 
@@ -821,6 +828,7 @@ const schedulerManager = {
                 `;
                 
                 const cont = details.querySelector('.unit-list');
+                
                 mod.units.sort((a,b)=>a.position-b.position).forEach(u => {
                     const scheduled = map[u.id] || 0;
                     const total = u.total_hours_required || 0;
@@ -830,7 +838,11 @@ const schedulerManager = {
                     const el = document.createElement('div');
                     el.draggable = true;
                     el.className = `p-2 border rounded cursor-grab hover:shadow-md bg-white ${done ? 'border-green-300' : 'border-gray-200'}`;
-                    el.ondragstart = (e) => { e.dataTransfer.setData('type','unit'); e.dataTransfer.setData('id',u.id); e.dataTransfer.setData('title',u.title); };
+                    el.ondragstart = (e) => { 
+                        e.dataTransfer.setData('type','unit'); 
+                        e.dataTransfer.setData('id',u.id); 
+                        e.dataTransfer.setData('title',u.title); 
+                    };
                     
                     el.innerHTML = `
                         <div class="flex justify-between text-[10px] font-bold text-gray-700 mb-1">
@@ -875,7 +887,12 @@ const schedulerManager = {
         let title = e.dataTransfer.getData('title');
         let unitId = e.dataTransfer.getData('id');
 
-        
+        if (type === 'other') {
+            const customName = prompt("Enter label:", "Meeting");
+            if (!customName) return; 
+            title = customName;
+        }
+
         titleEl.innerText = title;
         modal.classList.remove('hidden');
         inputHours.value = 6.5; 
@@ -892,7 +909,6 @@ const schedulerManager = {
 
             if (inputInsert.checked) await schedulerManager.shiftFutureItems(dateStr, 1);
 
-            // FIXED: unit_id null for misc items prevents 400 error
             await sb.from('schedules').insert([{
                 course_id: state.activeCourse.id,
                 unit_id: type === 'unit' ? parseInt(unitId) : null,
@@ -996,9 +1012,7 @@ const schedulerManager = {
                     } else if (item.type === 'holiday') {
                         borderColor = '#ef4444'; bgColor = '#fef2f2'; textColor = '#991b1b';
                     } else if (item.type === 'other') {
-                        // FIX: Add styling for 'other' so it is visible
-                        borderColor = '#f59e0b'; bgColor = '#fffbeb'; textColor = '#92400e'; 
-                    
+                        borderColor = '#f59e0b'; bgColor = '#fffbeb'; textColor = '#92400e';
                     }
 
                     div.style.borderLeftColor = borderColor;
