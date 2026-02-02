@@ -229,6 +229,9 @@ const ui = {
 // ==========================================
 // 4. CORE MANAGERS
 // ==========================================
+// ==========================================
+// 4. CORE MANAGERS
+// ==========================================
 const dashboard = {
     filter: 'all', // 'all' or 'my'
     
@@ -239,9 +242,12 @@ const dashboard = {
         // 1. Fetch Data
         const { data: courses } = await sb.from('courses').select('*').order('created_at');
         const { data: enrolls } = await sb.from('enrollments').select('*').eq('user_id', state.user.id);
-        const myMap = {}; enrolls?.forEach(e => myMap[e.course_id] = e.course_role);
         
-        // 2. Render Header with Filter (RESTORED)
+        // Create a map of course_id -> role
+        const myMap = {}; 
+        enrolls?.forEach(e => myMap[e.course_id] = e.course_role);
+        
+        // 2. Render Header with Filter
         const headerHtml = `
             <div class="flex justify-between items-center mb-6">
                 <h2 class="text-2xl font-bold text-slate-800">Available Courses</h2>
@@ -260,8 +266,11 @@ const dashboard = {
         } else {
             const filtered = courses.filter(c => {
                 const role = myMap[c.id];
-                if(dashboard.filter === 'my') return !!role; // Only show enrolled
-                return true; // Show all (Admin can see all, Students see all public)
+                if(dashboard.filter === 'my') {
+                    // Show if enrolled OR if you are the creator/super_admin (optional, but safer)
+                    return !!role; 
+                }
+                return true; 
             });
 
             if(filtered.length === 0) {
@@ -270,7 +279,6 @@ const dashboard = {
                 cardsHtml = `<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">` + 
                 filtered.map(c => {
                     const role = myMap[c.id];
-                    // Hide if not enrolled and not admin? (Optional logic, currently showing all for "All")
                     const imgStyle = c.image_url ? `background-image: url('${c.image_url}')` : '';
                     const imgHtml = c.image_url ? `<div class="h-32 bg-cover bg-center" style="${imgStyle}"></div>` : `<div class="h-32 bg-teal-100 flex items-center justify-center text-teal-600"><i class="ph ph-book text-4xl"></i></div>`;
                     
@@ -288,13 +296,8 @@ const dashboard = {
         }
 
         // 4. Update DOM
-        // We need to inject the header + grid into #dashboard-content
-        // But dashboard-content usually only had the grid. Let's clear and rebuild.
         const dbContainer = document.getElementById('dashboard-content');
         dbContainer.innerHTML = headerHtml + cardsHtml;
-        
-        // Re-bind the onclicks for filter (since innerHTML wipes them if not on window)
-        // They are on dashboard.setFilter, ensuring dashboard is on window.
     },
 
     setFilter: (f) => {
@@ -303,7 +306,6 @@ const dashboard = {
     },
 
     openCourse: (courseId, role) => {
-        // Need to fetch full object since we just passed ID
         sb.from('courses').select('*').eq('id', courseId).single().then(({data: course}) => {
             state.activeCourse = course;
             state.courseRole = state.profile.global_role === 'super_admin' ? 'super_admin' : role;
