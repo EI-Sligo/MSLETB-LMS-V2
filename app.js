@@ -921,6 +921,7 @@ const schedulerManager = {
 
             schedulerManager.init();
         };
+        },
 dragMisc: (e, type) => {
         e.dataTransfer.setData('type', type);
         // Default titles
