@@ -863,7 +863,7 @@ const schedulerManager = {
 
     dragMisc: (e, type) => {
         e.dataTransfer.setData('type', type);
-        let title = type === 'exam' ? 'Exam' : (type === 'holiday' ? 'Holiday' : 'Other');
+        let title = type === 'exam' ? 'Exam' : (type === 'holiday' ? 'Holiday' :  let title = type === 'other' ? 'Other' :);
         e.dataTransfer.setData('title', title);
     },
 
@@ -887,13 +887,7 @@ const schedulerManager = {
         let title = e.dataTransfer.getData('title');
         let unitId = e.dataTransfer.getData('id');
 
-        if (type === 'other') {
-            const customName = prompt("Enter label:", "Meeting");
-            if (!customName) return; 
-            title = customName;
-        }
-
-        titleEl.innerText = title;
+                titleEl.innerText = title;
         modal.classList.remove('hidden');
         inputHours.value = 6.5; 
         inputInsert.checked = false;
