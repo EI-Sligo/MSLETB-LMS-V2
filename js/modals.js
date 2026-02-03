@@ -281,8 +281,12 @@ export const contentModal = {
     targetUnitId: null, editId: null, currentData: null, 
     
     open: (unitId, item = null) => {
-        contentModal.targetUnitId = unitId; contentModal.editId = item ? item.id : null; contentModal.currentData = item;
-        const modal = document.getElementById('modal-add-content'); modal.classList.remove('hidden');
+        contentModal.targetUnitId = unitId; 
+        contentModal.editId = item ? item.id : null; 
+        contentModal.currentData = item;
+
+        const modal = document.getElementById('modal-add-content'); 
+        modal.classList.remove('hidden');
         
         document.getElementById('input-content-title').value = item ? item.title : '';
         document.getElementById('input-content-desc').value = (item && item.data) ? item.data.description : '';
@@ -301,12 +305,15 @@ export const contentModal = {
             div.innerHTML = `<label class="flex items-center gap-2 cursor-pointer bg-red-50 p-2 rounded border border-red-100 hover:bg-red-100 transition"><input type="checkbox" id="input-open-external" class="rounded text-red-600"><span class="text-sm font-bold text-red-700 flex items-center gap-2"><i class="ph ph-youtube-logo"></i> Open in YouTube?</span></label><p class="text-xs text-gray-500 mt-1 ml-2">Select this if video is blocked inside LMS.</p>`;
             document.getElementById('source-wrapper').appendChild(div);
         }
-        document.getElementById('input-open-external').checked = (item && item.data && item.data.openExternal);
+        // Set state safely
+        const ytCheck = document.getElementById('input-open-external');
+        ytCheck.checked = (item && item.data && item.data.openExternal) || false;
 
         // --- RESTORED: Inject Quiz Question Count ---
         let qCountInput = document.getElementById('input-quiz-count');
         if (!qCountInput) {
-            const wrapper = document.createElement('div'); wrapper.className = "mb-4 border-b pb-4";
+            const wrapper = document.createElement('div'); 
+            wrapper.className = "mb-4 border-b pb-4";
             wrapper.innerHTML = `<label class="block text-sm font-semibold text-gray-700 mb-1">Questions to Ask</label><div class="flex items-center gap-2"><input type="number" id="input-quiz-count" class="w-24 border border-gray-300 rounded p-2 text-sm" value="10" min="1"><span class="text-xs text-gray-500">(Random subset from pool)</span></div>`;
             document.getElementById('quiz-wrapper').prepend(wrapper);
             qCountInput = document.getElementById('input-quiz-count');
@@ -328,8 +335,11 @@ export const contentModal = {
         }
         document.getElementById('input-allow-download').checked = item ? item.allow_download : false;
 
+        // Load Questions
         document.getElementById('quiz-questions-list').innerHTML = ''; 
-        if (item && item.type === 'quiz' && item.data && item.data.questions) { item.data.questions.forEach(q => quizManager.addQuestionUI(q)); }
+        if (item && item.type === 'quiz' && item.data && item.data.questions) { 
+            item.data.questions.forEach(q => quizManager.addQuestionUI(q)); 
+        }
         
         contentModal.toggleFields();
     },
@@ -360,7 +370,9 @@ export const contentModal = {
             sourceWrapper.classList.add('hidden'); 
         } else { 
             document.getElementById('lbl-source').innerText = "Source"; 
+            // Show YouTube option
             if (['video', 'url'].includes(type) && ytWrapper) ytWrapper.classList.remove('hidden');
+            // Show Download option
             if (['video', 'audio', 'file'].includes(type) && dlWrapper) dlWrapper.classList.remove('hidden');
         } 
         
@@ -372,7 +384,9 @@ export const contentModal = {
     },
     
     save: async () => { 
-        const btn = document.getElementById('btn-save-content'); btn.innerText = '⏳ Saving...'; btn.disabled = true; 
+        const btn = document.getElementById('btn-save-content'); 
+        btn.innerText = '⏳ Saving...'; 
+        btn.disabled = true; 
         try { 
             const unitId = contentModal.targetUnitId; 
             const type = document.getElementById('input-content-type').value; 
@@ -386,11 +400,11 @@ export const contentModal = {
             let finalUrl = contentModal.currentData ? contentModal.currentData.file_url : null; 
             let metaData = contentModal.currentData ? (contentModal.currentData.data || {}) : {}; 
             
+            // SAVE SETTINGS
             metaData.openExternal = document.getElementById('input-open-external')?.checked || false;
 
             if(type === 'quiz') { 
                 metaData.questionCount = parseInt(document.getElementById('input-quiz-count').value) || 10;
-                
                 const qEls = document.querySelectorAll('#quiz-questions-list > .question-card-ui'); 
                 if (qEls.length > 0) { 
                     const questions = Array.from(qEls).map(div => ({ 
@@ -410,9 +424,11 @@ export const contentModal = {
                 } else { 
                     const file = document.getElementById('input-content-file').files[0]; 
                     if (file) { 
-                        // --- FIX IS HERE: Added .${ext} to the upload path ---
+                        // --- CRITICAL FIX: Add extension to filename ---
                         const ext = file.name.split('.').pop().toLowerCase(); 
                         const path = `uploads/${Date.now()}_${file.name.replace(/[^a-zA-Z0-9]/g, '_')}.${ext}`; 
+                        // -----------------------------------------------
+
                         const { error } = await sb.storage.from('course_content').upload(path, file); 
                         if (error) throw error; 
                         const { data } = sb.storage.from('course_content').getPublicUrl(path); 

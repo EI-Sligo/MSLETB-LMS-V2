@@ -128,7 +128,9 @@ export const courseManager = {
     moveItem: async (table, id, direction) => { let query = sb.from(table).select('id, position'); if (table === 'sections') query = query.eq('course_id', state.activeCourse.id); else if (table === 'modules') { const parentSec = state.structure.find(s => s.modules && s.modules.some(m => m.id === id)); if(parentSec) query = query.eq('section_id', parentSec.id); } else if (table === 'units') query = query.eq('module_id', state.activeModule.id); else if (table === 'content') { const { data: c } = await sb.from('content').select('unit_id').eq('id', id).single(); if(c) query = query.eq('unit_id', c.unit_id); } const { data: items } = await query.order('position', { ascending: true }); const sorted = items.map((item, idx) => ({ ...item, position: idx })); const index = sorted.findIndex(i => i.id === id); if (index === -1) return; const neighborIndex = direction === 'up' ? index - 1 : index + 1; if (neighborIndex < 0 || neighborIndex >= sorted.length) return; const temp = sorted[index].position; sorted[index].position = sorted[neighborIndex].position; sorted[neighborIndex].position = temp; for(const item of sorted) await sb.from(table).update({ position: item.position }).eq('id', item.id); if (table === 'units' || table === 'content') courseManager.openModule(state.activeModule.id); else courseManager.loadSyllabus(); },
     toggleVisibility: async (table, id, isVisible) => { try { await sb.from(table).update({ is_visible: isVisible }).eq('id', id); ui.toast("Visibility updated", "success"); } catch(e) { ui.toast("Error updating", "error"); } },
     updateHours: async (unitId, hours) => { try { await sb.from('units').update({ total_hours_required: hours }).eq('id', unitId); state.structure.forEach(s => s.modules?.forEach(m => m.units?.forEach(u => { if(u.id == unitId) u.total_hours_required = parseFloat(hours); }))); if(!document.getElementById('tab-schedule').classList.contains('hidden')) schedulerManager.renderSidebar(); } catch (e) { ui.toast("Error updating hours", "error"); } },
-launchContent: async (id, type, url) => {
+// ... inside courseManager object ...
+
+    launchContent: async (id, type, url) => {
         const { data: content } = await sb.from('content').select('allow_download, data').eq('id', id).single();
         const allowDl = content ? content.allow_download : false;
         const meta = content ? content.data : {}; 
@@ -156,7 +158,7 @@ launchContent: async (id, type, url) => {
             courseManager.openViewer(url, type, canDownload); 
         }
         else if (type === 'url') {
-            // FIX: Open YouTube in viewer unless forced external
+            // FIX: If it is YouTube and NOT forced external, open in Viewer
             if (isYouTube && !meta?.openExternal) {
                 courseManager.openViewer(url, 'video', false);
             } else {
@@ -206,6 +208,7 @@ launchContent: async (id, type, url) => {
             body.innerHTML = `<div class="text-white text-center p-8"><p class="text-xl">Preview not available.</p>${canDownload ? `<a href="${url}" target="_blank" class="text-teal-400 underline">Download</a>` : ''}</div>`; 
         } 
     },
+    
     closeViewer: () => { document.getElementById('modal-viewer').classList.add('hidden'); document.getElementById('viewer-body').innerHTML=''; },
     closeAudio: () => { const m = document.getElementById('modal-audio'); if(m) m.classList.add('hidden'); document.getElementById('audio-player')?.pause(); },
     
