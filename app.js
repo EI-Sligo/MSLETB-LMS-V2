@@ -887,11 +887,6 @@ const schedulerManager = {
         let title = e.dataTransfer.getData('title');
         let unitId = e.dataTransfer.getData('id');
 
-        if (type === 'other') {
-            const customName = prompt("Enter label:", "Meeting");
-            if (!customName) return; 
-            title = customName;
-        }
 
         titleEl.innerText = title;
         modal.classList.remove('hidden');
