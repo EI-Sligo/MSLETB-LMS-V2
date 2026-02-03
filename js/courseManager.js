@@ -128,10 +128,10 @@ export const courseManager = {
     moveItem: async (table, id, direction) => { let query = sb.from(table).select('id, position'); if (table === 'sections') query = query.eq('course_id', state.activeCourse.id); else if (table === 'modules') { const parentSec = state.structure.find(s => s.modules && s.modules.some(m => m.id === id)); if(parentSec) query = query.eq('section_id', parentSec.id); } else if (table === 'units') query = query.eq('module_id', state.activeModule.id); else if (table === 'content') { const { data: c } = await sb.from('content').select('unit_id').eq('id', id).single(); if(c) query = query.eq('unit_id', c.unit_id); } const { data: items } = await query.order('position', { ascending: true }); const sorted = items.map((item, idx) => ({ ...item, position: idx })); const index = sorted.findIndex(i => i.id === id); if (index === -1) return; const neighborIndex = direction === 'up' ? index - 1 : index + 1; if (neighborIndex < 0 || neighborIndex >= sorted.length) return; const temp = sorted[index].position; sorted[index].position = sorted[neighborIndex].position; sorted[neighborIndex].position = temp; for(const item of sorted) await sb.from(table).update({ position: item.position }).eq('id', item.id); if (table === 'units' || table === 'content') courseManager.openModule(state.activeModule.id); else courseManager.loadSyllabus(); },
     toggleVisibility: async (table, id, isVisible) => { try { await sb.from(table).update({ is_visible: isVisible }).eq('id', id); ui.toast("Visibility updated", "success"); } catch(e) { ui.toast("Error updating", "error"); } },
     updateHours: async (unitId, hours) => { try { await sb.from('units').update({ total_hours_required: hours }).eq('id', unitId); state.structure.forEach(s => s.modules?.forEach(m => m.units?.forEach(u => { if(u.id == unitId) u.total_hours_required = parseFloat(hours); }))); if(!document.getElementById('tab-schedule').classList.contains('hidden')) schedulerManager.renderSidebar(); } catch (e) { ui.toast("Error updating hours", "error"); } },
-   launchContent: async (id, type, url) => {
+launchContent: async (id, type, url) => {
         const { data: content } = await sb.from('content').select('allow_download, data').eq('id', id).single();
         const allowDl = content ? content.allow_download : false;
-        const meta = content ? content.data : {}; // Get metadata
+        const meta = content ? content.data : {}; 
 
         sb.from('activity_logs').insert([{ user_id: state.user.id, content_id: id, action_type: 'viewed' }]).then(()=>{});
         const canDownload = isAdmin() || allowDl; 
@@ -141,7 +141,7 @@ export const courseManager = {
 
         if(type === 'simulator') {
             const cleanUrl = url.split('?')[0]; 
-            window.open(`${cleanUrl}?auth=msletb_secure_launch&uid=${state.user.id}&cid=${id}`, '_blank');
+            window.open(`${cleanUrl}?auth=msletb_secure_launch&uid=${state.user.id}&cid=${id}`, '_blank'); 
         }
         else if (type === 'audio') { 
             const m = document.getElementById('modal-audio'); 
@@ -156,11 +156,11 @@ export const courseManager = {
             courseManager.openViewer(url, type, canDownload); 
         }
         else if (type === 'url') {
-            // FIX: If it is YouTube and NOT forced external, open in Viewer
+            // FIX: Open YouTube in viewer unless forced external
             if (isYouTube && !meta?.openExternal) {
                 courseManager.openViewer(url, 'video', false);
             } else {
-                window.open(url, '_blank');
+                window.open(url, '_blank'); 
             }
         }
         else if (type === 'assignment') { 
@@ -170,82 +170,41 @@ export const courseManager = {
             isAdmin() ? alert("Admins cannot take quizzes.") : quizManager.takeQuiz(id); 
         }
     },
-    openViewer: (url, type, canDownload) => {
-        const modal = document.getElementById('modal-viewer');
-        const body = document.getElementById('viewer-body');
-        const dlBtn = document.getElementById('viewer-download-btn');
-        const titleEl = document.getElementById('viewer-title');
-        
-        modal.classList.remove('hidden');
-        
-        // 1. Configure Download Button
-        if(dlBtn) {
-            if (canDownload) {
-                dlBtn.classList.remove('hidden');
-                dlBtn.href = url;
-            } else {
-                dlBtn.classList.add('hidden');
-                dlBtn.href = '#';
-            }
-        }
-        
-        body.innerHTML = '<div class="text-white flex items-center justify-center h-full"><i class="ph ph-spinner animate-spin text-4xl"></i></div>'; 
 
-        // 2. Parse Extension & Title
-        const cleanUrl = url.split('?')[0];
-        const ext = cleanUrl.split('.').pop().toLowerCase();
-        let fileName = url.split('/').pop().split('?')[0];
+    openViewer: (url, type, canDownload) => { 
+        const modal = document.getElementById('modal-viewer'); 
+        const body = document.getElementById('viewer-body'); 
+        const dlBtn = document.getElementById('viewer-download-btn'); 
         
-        // Detect YouTube
-        const isYouTube = url.includes('youtube.com') || url.includes('youtu.be');
+        modal.classList.remove('hidden'); 
         
-        if (isYouTube) {
-            fileName = "YouTube Video"; 
-            if(titleEl) titleEl.innerText = fileName;
+        // Reset
+        body.innerHTML = '<div class="text-white flex items-center justify-center h-full"><i class="ph ph-spinner animate-spin text-4xl"></i></div>';
+        if(dlBtn) { dlBtn.classList.toggle('hidden', !canDownload); dlBtn.href = canDownload ? url : '#'; } 
 
-            // Extract Video ID
+        // Logic for YouTube
+        if (url.includes('youtube') || url.includes('youtu.be')) { 
             let videoId = '';
-            if (url.includes('youtu.be')) {
-                videoId = url.split('youtu.be/')[1].split('?')[0];
-            } else if (url.includes('v=')) {
-                videoId = url.split('v=')[1].split('&')[0];
-            } else if (url.includes('embed/')) {
-                videoId = url.split('embed/')[1].split('?')[0];
-            }
+            if (url.includes('youtu.be/')) videoId = url.split('youtu.be/')[1].split('?')[0];
+            else if (url.includes('v=')) videoId = url.split('v=')[1].split('&')[0];
+            else if (url.includes('embed/')) videoId = url.split('embed/')[1].split('?')[0];
 
             if(videoId) {
-                body.innerHTML = `<iframe src="https://www.youtube.com/embed/${videoId}" class="w-full h-full border-0" allowfullscreen allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"></iframe>`;
+                body.innerHTML = `<iframe src="https://www.youtube.com/embed/${videoId}?autoplay=1" class="w-full h-full border-0" allowfullscreen allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"></iframe>`;
                 return;
             }
-        }
-
-        if(titleEl) titleEl.innerText = decodeURIComponent(fileName);
-
-        // 3. Render Content based on Type (Strict Matching)
-        if (type === 'video' || ['mp4', 'webm', 'ogg'].includes(ext)) {
-            const controls = canDownload ? 'controls' : 'controls controlsList="nodownload"';
-            body.innerHTML = `<video src="${url}" ${controls} class="max-h-full max-w-full shadow-lg rounded outline-none"></video>`;
         } 
-        else if (['doc', 'docx', 'ppt', 'pptx', 'xls', 'xlsx'].includes(ext)) {
-            // OPTION A: Microsoft Office Viewer
-            const viewerUrl = `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(url)}`;
-            body.innerHTML = `<iframe src="${viewerUrl}" class="w-full h-full border-0 bg-white"></iframe>`;
+        
+        // Logic for Files
+        const ext = url.split('?')[0].split('.').pop().toLowerCase(); 
+        
+        if (type === 'video' || ['mp4', 'webm'].includes(ext)) { 
+            body.innerHTML = `<video src="${url}" ${canDownload?'controls':'controls controlsList="nodownload"'} class="max-h-full max-w-full shadow-lg rounded"></video>`; 
+        } else if (['pdf', 'jpg', 'png', 'jpeg', 'gif'].includes(ext)) { 
+            body.innerHTML = `<iframe src="${url}#toolbar=0" class="w-full h-full border-0 bg-white"></iframe>`; 
+        } else { 
+            body.innerHTML = `<div class="text-white text-center p-8"><p class="text-xl">Preview not available.</p>${canDownload ? `<a href="${url}" target="_blank" class="text-teal-400 underline">Download</a>` : ''}</div>`; 
         } 
-        else if (['pdf', 'jpg', 'jpeg', 'png', 'gif'].includes(ext)) {
-            // OPTION B: Native Browser Support (PDFs/Images)
-            body.innerHTML = `<iframe src="${url}#toolbar=0&navpanes=0&scrollbar=0" class="w-full h-full border-0 bg-white"></iframe>`;
-        } 
-        else {
-            // OPTION C: Fallback
-            body.innerHTML = `
-                <div class="text-white text-center p-8">
-                    <i class="ph ph-file-x text-6xl mb-4 text-gray-500"></i>
-                    <p class="text-xl font-bold">Preview not available</p>
-                    <p class="text-sm text-gray-400 mt-2">This file type (${ext}) cannot be viewed in the browser.</p>
-                    ${canDownload ? `<a href="${url}" target="_blank" class="mt-6 inline-block bg-teal-600 hover:bg-teal-700 text-white px-6 py-2 rounded font-bold transition">Download File</a>` : ''}
-                </div>
-            `;
-        }
     },
     closeViewer: () => { document.getElementById('modal-viewer').classList.add('hidden'); document.getElementById('viewer-body').innerHTML=''; },
     closeAudio: () => { const m = document.getElementById('modal-audio'); if(m) m.classList.add('hidden'); document.getElementById('audio-player')?.pause(); },

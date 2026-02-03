@@ -22,7 +22,9 @@ export const assignmentManager = {
         
         let fileUrl = null;
         if(file) {
-            const path = `assignments/${state.user.id}_${Date.now()}_${file.name}`;
+            // FIX: Add extension to filename
+            const ext = file.name.split('.').pop();
+            const path = `assignments/${state.user.id}_${Date.now()}.${ext}`;
             await sb.storage.from('course_content').upload(path, file);
             const { data } = sb.storage.from('course_content').getPublicUrl(path);
             fileUrl = data.publicUrl;
@@ -50,7 +52,7 @@ export const assignmentManager = {
         
         list.innerHTML = data.map(sub => {
             let fileDisplay = '';
-            if (sub.file_url === 'simulator_snapshot') {
+            if (sub.file_url && sub.file_url.includes('simulator_snapshot')) {
                 const simUrl = `./simulator/index.html?auth=msletb_secure_launch&viewSubmission=${sub.id}`;
                 fileDisplay = `<a href="${simUrl}" target="_blank" class="text-xs font-bold text-purple-600 bg-purple-100 px-3 py-1 rounded border border-purple-200 hover:bg-purple-200 flex items-center gap-1 w-fit transition"><i class="ph ph-circuitry"></i> View Circuit</a>`;
             } else if (sub.file_url) {
@@ -290,9 +292,7 @@ export const contentModal = {
         const typeSelect = document.getElementById('input-content-type');
         if (item) { typeSelect.value = item.type; typeSelect.disabled = true; } else { typeSelect.value = 'file'; typeSelect.disabled = false; }
 
-        // --- INJECT RESTORED UI ELEMENTS ---
-        
-        // 1. YouTube Checkbox
+        // --- RESTORED: Inject YouTube Checkbox ---
         let ytWrapper = document.getElementById('youtube-force-wrapper');
         if (!ytWrapper) {
             const div = document.createElement('div'); 
@@ -303,7 +303,7 @@ export const contentModal = {
         }
         document.getElementById('input-open-external').checked = (item && item.data && item.data.openExternal);
 
-        // 2. Quiz Question Count
+        // --- RESTORED: Inject Quiz Question Count ---
         let qCountInput = document.getElementById('input-quiz-count');
         if (!qCountInput) {
             const wrapper = document.createElement('div'); wrapper.className = "mb-4 border-b pb-4";
@@ -317,7 +317,7 @@ export const contentModal = {
             qCountInput.value = 10;
         }
 
-        // 3. Permission Logic (Download)
+        // --- RESTORED: Permission Logic (Download) ---
         let dlWrapper = document.getElementById('download-permission-wrapper');
         if(!dlWrapper) {
             const div = document.createElement('div');
@@ -360,9 +360,7 @@ export const contentModal = {
             sourceWrapper.classList.add('hidden'); 
         } else { 
             document.getElementById('lbl-source').innerText = "Source"; 
-            // Show YouTube option
             if (['video', 'url'].includes(type) && ytWrapper) ytWrapper.classList.remove('hidden');
-            // Show Download option
             if (['video', 'audio', 'file'].includes(type) && dlWrapper) dlWrapper.classList.remove('hidden');
         } 
         
@@ -388,11 +386,9 @@ export const contentModal = {
             let finalUrl = contentModal.currentData ? contentModal.currentData.file_url : null; 
             let metaData = contentModal.currentData ? (contentModal.currentData.data || {}) : {}; 
             
-            // SAVE RESTORED SETTINGS
             metaData.openExternal = document.getElementById('input-open-external')?.checked || false;
 
             if(type === 'quiz') { 
-                // SAVE QUESTION COUNT
                 metaData.questionCount = parseInt(document.getElementById('input-quiz-count').value) || 10;
                 
                 const qEls = document.querySelectorAll('#quiz-questions-list > .question-card-ui'); 
@@ -414,8 +410,9 @@ export const contentModal = {
                 } else { 
                     const file = document.getElementById('input-content-file').files[0]; 
                     if (file) { 
+                        // --- FIX IS HERE: Added .${ext} to the upload path ---
                         const ext = file.name.split('.').pop().toLowerCase(); 
-                        const path = `uploads/${Date.now()}_${file.name.replace(/[^a-zA-Z0-9]/g, '_')}`; 
+                        const path = `uploads/${Date.now()}_${file.name.replace(/[^a-zA-Z0-9]/g, '_')}.${ext}`; 
                         const { error } = await sb.storage.from('course_content').upload(path, file); 
                         if (error) throw error; 
                         const { data } = sb.storage.from('course_content').getPublicUrl(path); 
