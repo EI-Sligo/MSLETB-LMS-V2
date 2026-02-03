@@ -40,9 +40,13 @@ export const schedulerManager = {
             modules.forEach(mod => {
                 if(!mod.units?.length) return;
                 const details = document.createElement('details');
-                details.open = true;
+                //details.open = true;
                 details.className = "mb-2 group border border-gray-200 rounded bg-white overflow-hidden";
-                details.innerHTML = `<summary class="flex items-center gap-2 p-2 bg-gray-50 cursor-pointer list-none text-xs font-bold text-gray-600 uppercase"><div class="w-2 h-2 rounded-full" style="background:${mod.color}"></div><span class="flex-1 truncate">${mod.title}</span><i class="ph ph-caret-down transition group-open:rotate-180"></i></summary><div class="unit-list p-2 space-y-1 bg-white"></div>`;
+                details.innerHTML = `<summary class="flex items-center gap-2 p-2 bg-gray-50 cursor-pointer list-none text-xs font-bold text-gray-600 uppercase">
+                <div class="w-2 h-2 rounded-full" style="background:${mod.color}"></div>
+                <span class="flex-1 truncate">${mod.title}</span>
+                <i class="ph ph-caret-down transition group-open:rotate-180"></i>
+                </summary><div class="unit-list p-2 space-y-1 bg-white"></div>`;
                 const cont = details.querySelector('.unit-list');
                 mod.units.sort((a,b)=>a.position-b.position).forEach(u => {
                     const scheduled = map[u.id] || 0;

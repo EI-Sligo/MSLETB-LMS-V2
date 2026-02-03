@@ -6,57 +6,84 @@ import { schedulerManager } from './scheduler.js';
 
 export const courseManager = {
     loadSyllabus: async (silent = false) => {
-        if(!silent) {
-            const list = document.getElementById('syllabus-list');
-            if(list) list.innerHTML = '<div class="p-4 text-center"><i class="ph ph-spinner animate-spin text-teal-600"></i></div>';
-        }
-        
-        let query = sb.from('sections').select('*, modules(*, units(*, content(*)))').eq('course_id', state.activeCourse.id).order('position');
-        if(!isAdmin()) query = query.eq('is_visible', true);
-        
-        const { data: sections } = await query;
-        state.structure = sections || [];
-
-        const palette = ['#dbeafe', '#d1fae5', '#fef9c3', '#fee2e2', '#f3e8ff', '#ffedd5'];
-        let modIdx = 0;
-        state.structure.forEach(sec => {
-            sec.modules?.sort((a,b)=>a.position-b.position).forEach(m => { m.color = palette[modIdx++ % palette.length]; });
-        });
-
-        if(silent) return; 
-
+    if(!silent) {
         const list = document.getElementById('syllabus-list');
-        list.innerHTML = '';
+        if(list) list.innerHTML = '<div class="p-4 text-center"><i class="ph ph-spinner animate-spin text-teal-600"></i></div>';
+    }
+    
+    let query = sb.from('sections').select('*, modules(*, units(*, content(*)))').eq('course_id', state.activeCourse.id).order('position');
+    if(!isAdmin()) query = query.eq('is_visible', true);
+    
+    const { data: sections } = await query;
+    state.structure = sections || [];
 
-        if (!sections || sections.length === 0) { list.innerHTML = '<div class="text-center text-gray-400 p-4 text-sm">No sections yet.</div>'; return; }
+    const palette = ['#dbeafe', '#d1fae5', '#fef9c3', '#fee2e2', '#f3e8ff', '#ffedd5'];
+    let modIdx = 0;
+    state.structure.forEach(sec => {
+        sec.modules?.sort((a,b)=>a.position-b.position).forEach(m => { m.color = palette[modIdx++ % palette.length]; });
+    });
 
-        sections.forEach(section => {
-            const modules = (section.modules || []).sort((a,b) => a.position - b.position);
-            const sectionEl = document.createElement('div');
-            sectionEl.className = "border-b border-gray-100 last:border-0";
-            
-            sectionEl.innerHTML = `
-                <div class="flex justify-between items-center p-3 hover:bg-slate-50 group cursor-pointer" onclick="ui.toggleAccordion('${section.id}')">
-                    <div class="flex items-center gap-2 font-bold text-xs text-gray-600 uppercase tracking-wide flex-1">
-                        <i id="acc-icon-${section.id}" class="ph ph-caret-down transition-transform duration-200"></i>
-                        <span class="truncate">${section.title}</span>
-                    </div>
-                    <div class="flex items-center gap-1" onclick="event.stopPropagation()">
-                        ${isAdmin() ? `<button onclick="courseManager.bulkCreate('module', ${section.id})" class="text-teal-600 hover:bg-teal-50 p-1 rounded" title="Add Module"><i class="ph ph-plus"></i></button><button onclick="entityModal.open('section', ${section.id}, '${section.title.replace(/'/g,"")}')" class="text-blue-500 hover:bg-blue-50 p-1 rounded"><i class="ph ph-pencil-simple"></i></button><button onclick="courseManager.deleteItem('sections', ${section.id})" class="text-red-400 hover:bg-red-50 p-1 rounded"><i class="ph ph-trash"></i></button>` : ''}
-                    </div>
+    if(silent) return; 
+
+    const list = document.getElementById('syllabus-list');
+    list.innerHTML = '';
+
+    if (!sections || sections.length === 0) { list.innerHTML = '<div class="text-center text-gray-400 p-4 text-sm">No sections yet.</div>'; return; }
+
+    sections.forEach(section => {
+        const modules = section.modules || [];
+        const div = document.createElement('div');
+        div.className = "border-b border-gray-100 last:border-0";
+        div.innerHTML = `
+            <div class="flex justify-between items-center p-3 hover:bg-slate-50 group cursor-pointer" onclick="ui.toggleAccordion('${section.id}')">
+                <div class="flex items-center gap-2 font-bold text-xs text-gray-600 uppercase tracking-wide flex-1">
+                    <i id="acc-icon-${section.id}" class="ph ph-caret-down transition-transform duration-200"></i>
+                    <span class="truncate">${section.title}</span>
                 </div>
-                <div id="acc-content-${section.id}" class="pl-4 pb-2 space-y-1 hidden">
-                    ${modules.map(m => `
-                        <div class="p-2 rounded cursor-pointer text-sm text-gray-600 hover:bg-teal-50 hover:text-teal-700 flex justify-between items-center group transition" onclick="courseManager.openModule('${m.id}')">
-                            <div class="flex items-center gap-2 flex-1"><div class="w-2 h-2 rounded-full" style="background:${m.color}"></div><span class="truncate ${!m.is_visible ? 'opacity-50 italic' : ''}">${m.title}</span></div>
-                            <div class="flex items-center gap-1" onclick="event.stopPropagation()">
-                                ${isAdmin() ? `<input type="checkbox" class="accent-teal-600 mr-1" ${m.is_visible ? 'checked' : ''} onclick="courseManager.toggleVisibility('modules', ${m.id}, this.checked)"><button onclick="courseManager.moveItem('modules', ${m.id}, 'up')" class="text-gray-400 hover:text-teal-600 hidden group-hover:block"><i class="ph ph-arrow-up"></i></button><button onclick="courseManager.moveItem('modules', ${m.id}, 'down')" class="text-gray-400 hover:text-teal-600 hidden group-hover:block"><i class="ph ph-arrow-down"></i></button><button onclick="entityModal.open('module', ${m.id}, '${m.title.replace(/'/g,"")}')" class="text-blue-400 hover:text-blue-600 hidden group-hover:block"><i class="ph ph-pencil-simple"></i></button><button onclick="courseManager.deleteItem('modules', ${m.id})" class="text-red-400 hover:text-red-600 hidden group-hover:block"><i class="ph ph-trash"></i></button>` : ''}
-                            </div>
-                        </div>`).join('')}
-                </div>`;
-            list.appendChild(sectionEl);
-        });
-    },
+                <div class="flex items-center gap-2" onclick="event.stopPropagation()">
+                    ${isAdmin() ? `
+                        <button onclick="courseManager.moveItem('sections', ${section.id}, 'up')" class="text-gray-400 hover:text-teal-600 p-1"><i class="ph ph-arrow-up"></i></button>
+                        <button onclick="courseManager.moveItem('sections', ${section.id}, 'down')" class="text-gray-400 hover:text-teal-600 p-1"><i class="ph ph-arrow-down"></i></button>
+                        
+                        <label class="relative inline-flex items-center cursor-pointer ml-1" title="Section Visibility">
+                            <input type="checkbox" class="sr-only peer" ${section.is_visible ? 'checked' : ''} 
+                                onchange="courseManager.toggleVisibility('sections', ${section.id}, this.checked)">
+                            <div class="w-7 h-4 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:bg-teal-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:after:translate-x-3"></div>
+                        </label>
+
+                        <button onclick="courseManager.bulkCreate('module', ${section.id})" class="text-teal-600 hover:bg-teal-50 p-1 rounded"><i class="ph ph-plus"></i></button>
+                        <button onclick="entityModal.open('section', ${section.id}, '${section.title.replace(/'/g,"")}')" class="text-blue-500 hover:bg-blue-50 p-1 rounded"><i class="ph ph-pencil-simple"></i></button>
+                        <button onclick="courseManager.deleteItem('sections', ${section.id})" class="text-red-400 hover:bg-red-50 p-1 rounded"><i class="ph ph-trash"></i></button>
+                    ` : ''}
+                </div>
+            </div>
+            <div id="acc-content-${section.id}" class="pl-4 pb-2 space-y-1 hidden">
+                ${modules.map(m => `
+                    <div class="p-2 rounded cursor-pointer text-sm text-gray-600 hover:bg-teal-50 hover:text-teal-700 flex justify-between items-center group transition" onclick="courseManager.openModule('${m.id}')">
+                        <div class="flex items-center gap-2 flex-1">
+                            <div class="w-2 h-2 rounded-full" style="background:${m.color}"></div>
+                            <span class="truncate ${!m.is_visible ? 'opacity-50 italic' : ''}">${m.title}</span>
+                        </div>
+                        <div class="flex items-center gap-2" onclick="event.stopPropagation()">
+                            ${isAdmin() ? `
+                                <button onclick="courseManager.moveItem('modules', ${m.id}, 'up')" class="text-gray-400 hover:text-teal-600 hidden group-hover:block"><i class="ph ph-arrow-up"></i></button>
+                                <button onclick="courseManager.moveItem('modules', ${m.id}, 'down')" class="text-gray-400 hover:text-teal-600 hidden group-hover:block"><i class="ph ph-arrow-down"></i></button>
+                                
+                                <label class="relative inline-flex items-center cursor-pointer" title="Module Visibility">
+                                    <input type="checkbox" class="sr-only peer" ${m.is_visible ? 'checked' : ''} 
+                                        onchange="courseManager.toggleVisibility('modules', ${m.id}, this.checked)">
+                                    <div class="w-7 h-4 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:bg-teal-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:after:translate-x-3"></div>
+                                </label>
+
+                                <button onclick="entityModal.open('module', ${m.id}, '${m.title.replace(/'/g,"")}')" class="text-blue-400 hover:text-blue-600 hidden group-hover:block"><i class="ph ph-pencil-simple"></i></button>
+                                <button onclick="courseManager.deleteItem('modules', ${m.id})" class="text-red-400 hover:text-red-600 hidden group-hover:block"><i class="ph ph-trash"></i></button>
+                            ` : ''}
+                        </div>
+                    </div>`).join('')}
+            </div>`;
+        list.appendChild(div);
+    });
+},
 
     openModule: async (moduleId) => {
         const { data: module } = await sb.from('modules').select('*').eq('id', moduleId).single();
@@ -207,7 +234,39 @@ export const courseManager = {
     addContent: (unitId) => contentModal.open(unitId),
     deleteItem: async (table, id) => { if(confirm("Delete this item?")) { await sb.from(table).delete().eq('id', id); if(table==='units'||table==='content') courseManager.openModule(state.activeModule.id); else courseManager.loadSyllabus(); } },
     editItem: async (table, id, currentTitle) => { const t = prompt(`Rename ${table}:`, currentTitle); if(!t) return; await sb.from(table).update({ title: t }).eq('id', id); if(table === 'sections' || table === 'modules') courseManager.loadSyllabus(); else courseManager.openModule(state.activeModule.id); },
-    moveItem: async (table, id, direction) => { let query = sb.from(table).select('id, position'); if (table === 'sections') query = query.eq('course_id', state.activeCourse.id); else if (table === 'modules') { const parentSec = state.structure.find(s => s.modules && s.modules.some(m => m.id === id)); if(parentSec) query = query.eq('section_id', parentSec.id); } else if (table === 'units') query = query.eq('module_id', state.activeModule.id); else if (table === 'content') { const { data: c } = await sb.from('content').select('unit_id').eq('id', id).single(); if(c) query = query.eq('unit_id', c.unit_id); } const { data: items } = await query.order('position', { ascending: true }); const sorted = items.map((item, idx) => ({ ...item, position: idx })); const index = sorted.findIndex(i => i.id === id); if (index === -1) return; const neighborIndex = direction === 'up' ? index - 1 : index + 1; if (neighborIndex < 0 || neighborIndex >= sorted.length) return; const temp = sorted[index].position; sorted[index].position = sorted[neighborIndex].position; sorted[neighborIndex].position = temp; for(const item of sorted) await sb.from(table).update({ position: item.position }).eq('id', item.id); if (table === 'units' || table === 'content') courseManager.openModule(state.activeModule.id); else courseManager.loadSyllabus(); },
+   moveItem: async (table, id, direction) => {
+    let query = sb.from(table).select('id, position');
+    
+    if (table === 'sections') {
+        query = query.eq('course_id', state.activeCourse.id);
+    } else if (table === 'modules') {
+        const parentSec = state.structure.find(s => s.modules && s.modules.some(m => m.id === id));
+        if(parentSec) query = query.eq('section_id', parentSec.id);
+    } else if (table === 'units') {
+        query = query.eq('module_id', state.activeModule.id);
+    } else if (table === 'content') {
+        const { data: c } = await sb.from('content').select('unit_id').eq('id', id).single();
+        if(c) query = query.eq('unit_id', c.unit_id);
+    }
+
+    const { data: items } = await query.order('position', { ascending: true });
+    const sorted = items.map((item, idx) => ({ ...item, position: idx }));
+    const index = sorted.findIndex(i => i.id === id);
+    
+    const neighborIndex = direction === 'up' ? index - 1 : index + 1;
+    if (neighborIndex >= 0 && neighborIndex < sorted.length) {
+        const temp = sorted[index].position;
+        sorted[index].position = sorted[neighborIndex].position;
+        sorted[neighborIndex].position = temp;
+        
+        for(const item of sorted) {
+            await sb.from(table).update({ position: item.position }).eq('id', item.id);
+        }
+        
+        if (table === 'units' || table === 'content') courseManager.openModule(state.activeModule.id);
+        else courseManager.loadSyllabus();
+    }
+},
     toggleVisibility: async (table, id, isVisible) => { try { await sb.from(table).update({ is_visible: isVisible }).eq('id', id); ui.toast("Visibility updated", "success"); } catch(e) { ui.toast("Error updating", "error"); } },
     updateHours: async (unitId, hours) => { try { await sb.from('units').update({ total_hours_required: hours }).eq('id', unitId); state.structure.forEach(s => s.modules?.forEach(m => m.units?.forEach(u => { if(u.id == unitId) u.total_hours_required = parseFloat(hours); }))); if(!document.getElementById('tab-schedule').classList.contains('hidden')) schedulerManager.renderSidebar(); } catch (e) { ui.toast("Error updating hours", "error"); } },
     
