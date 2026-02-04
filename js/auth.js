@@ -4,31 +4,59 @@ import { isAdmin } from './utils.js';
 
 export const auth = {
     init: async () => {
+        // 1. Listen for Auth Changes (including Password Recovery)
+        sb.auth.onAuthStateChange(async (event, session) => {
+            if (event === 'PASSWORD_RECOVERY') {
+                // This runs when the user clicks the reset link
+                const newPass = prompt("Please enter your new password:");
+                if (newPass) {
+                    const { error } = await sb.auth.updateUser({ password: newPass });
+                    if (error) {
+                        ui.toast(error.message, 'error');
+                    } else {
+                        alert("Password updated successfully!");
+                        window.location.href = "/"; // Clear the recovery hash from URL
+                    }
+                }
+            } else if (event === 'SIGNED_OUT') {
+                app.showLogin();
+            } else if (event === 'SIGNED_IN' && session) {
+                // Standard login flow
+                state.user = session.user;
+                await auth.loadProfile();
+                app.showApp();
+            }
+        });
+
+        // 2. Check if already logged in (Initial Load)
         const { data: { session } } = await sb.auth.getSession();
-        sb.auth.onAuthStateChange((e) => { if (e === 'SIGNED_OUT') window.location.reload(); });
-        if (session) { state.user = session.user; await auth.loadProfile(); app.showApp(); } 
-        else { app.showLogin(); }
+        if (session) { 
+            state.user = session.user; 
+            await auth.loadProfile(); 
+            app.showApp(); 
+        } else { 
+            app.showLogin(); 
+        }
     },
     
     signIn: async (email, password) => {
         const { data, error } = await sb.auth.signInWithPassword({ email, password });
         if (error) ui.toast(error.message, 'error');
-        else { state.user = data.user; await auth.loadProfile(); app.showApp(); }
+        // onAuthStateChange will handle the success case
     },
 
-    // ADDED: Fixes 'auth.resetPassword is not a function' error
     resetPassword: async () => {
         let email = document.getElementById('email')?.value;
         if (!email) {
             email = prompt("Please enter your email address to reset your password:");
         }
         
-        if (!email) return; // User cancelled or didn't enter email
+        if (!email) return;
 
         ui.toast("Sending reset email...", "info");
         
         const { error } = await sb.auth.resetPasswordForEmail(email, {
-            redirectTo: window.location.href // Returns user to this app after clicking email link
+            redirectTo: window.location.href // Ensures they come back to this page
         });
 
         if (error) ui.toast(error.message, 'error');
