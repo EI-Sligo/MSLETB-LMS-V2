@@ -31,7 +31,9 @@ export const courseManager = {
     if (!sections || sections.length === 0) { list.innerHTML = '<div class="text-center text-gray-400 p-4 text-sm">No sections yet.</div>'; return; }
 
     sections.forEach(section => {
-        const modules = section.modules || [];
+        let modules = section.modules || [];
+// FIX: If not admin, hide modules that are set to hidden
+if (!isAdmin()) modules = modules.filter(m => m.is_visible);
         const div = document.createElement('div');
         div.className = "border-b border-gray-100 last:border-0";
         div.innerHTML = `
@@ -277,5 +279,285 @@ export const courseManager = {
     enroll: async () => { const email = document.getElementById('email-in').value; const role = document.getElementById('role-in').value; if(!email) return ui.toast("Enter email", "error"); const { data: u } = await sb.from('profiles').select('id').eq('email', email).maybeSingle(); if(u) { await sb.from('enrollments').insert([{course_id:state.activeCourse.id, user_id:u.id, course_role:role}]); ui.toast("User Enrolled!", "success"); } else { await sb.from('invitations').insert([{course_id:state.activeCourse.id, email, role, invited_by:state.user.id}]); ui.toast("Invite Sent!", "success"); } courseManager.loadTeam(); },
     delInvite: async (id) => { if(confirm("Cancel invite?")) { await sb.from('invitations').delete().eq('id', id); courseManager.loadTeam(); }},
     delUser: async (uid) => { if(confirm("Remove user from course?")) { await sb.from('enrollments').delete().eq('course_id', state.activeCourse.id).eq('user_id', uid); courseManager.loadTeam(); }},
-    loadReports: async () => { const el = document.getElementById('tab-reports'); el.innerHTML = '<div class="flex justify-center p-8"><i class="ph ph-spinner animate-spin text-3xl text-teal-600"></i></div>'; const { data: sections } = await sb.from('sections').select('id, title, modules(id, title, units(id, title, content(id, title, type)))').eq('course_id', state.activeCourse.id).order('position'); let gradableItems = []; sections?.forEach(s => s.modules?.forEach(m => m.units?.forEach(u => u.content?.forEach(c => { if(['assignment', 'quiz', 'simulator'].includes(c.type)) { gradableItems.push({ id: c.id, title: c.title, type: c.type, context: `${m.title} <br> <span class="text-gray-400 font-normal text-[10px] uppercase tracking-wide">${u.title}</span>` }); } })))); if (isAdmin()) { const { data: roster } = await sb.from('enrollments').select('user_id, profiles(email)').eq('course_id', state.activeCourse.id).eq('course_role', 'student'); if (!roster || roster.length === 0) { el.innerHTML = '<p class="text-gray-500 p-6">No students enrolled yet.</p>'; return; } const itemIds = gradableItems.map(i => i.id); const { data: allAssigns } = await sb.from('assignments').select('*').in('content_id', itemIds); const { data: allQuizzes } = await sb.from('quiz_results').select('*').in('content_id', itemIds).order('submitted_at', { ascending: true }); const gradebook = {}; roster.forEach(s => gradebook[s.user_id] = { email: s.profiles.email, data: {} }); allAssigns?.forEach(a => { if(gradebook[a.student_id]) gradebook[a.student_id].data[a.content_id] = { type: 'assignment', grade: a.grade || 'Submitted' }; }); allQuizzes?.forEach(q => { if(gradebook[q.user_id]) { if(!gradebook[q.user_id].data[q.content_id]) gradebook[q.user_id].data[q.content_id] = { type: 'quiz', history: [], best: null }; const info = getGradeInfo(q.score, q.total); gradebook[q.user_id].data[q.content_id].history.push(info.pct); if(!gradebook[q.user_id].data[q.content_id].best || info.pct > gradebook[q.user_id].data[q.content_id].best.pct) gradebook[q.user_id].data[q.content_id].best = info; } }); let tableHtml = `<div class="flex justify-between items-center mb-4"><h2 class="text-xl font-bold text-gray-800">Class Gradebook</h2><button onclick="courseManager.loadReports()" class="text-sm text-teal-600 hover:underline"><i class="ph ph-arrow-clockwise"></i> Refresh</button></div><div class="overflow-x-auto bg-white rounded-lg shadow border border-gray-200"><table class="w-full text-sm text-left whitespace-nowrap"><thead class="bg-gray-50 text-gray-600 font-bold border-b border-gray-200"><tr><th class="p-4 sticky left-0 bg-gray-50 z-10 border-r">Student</th>${gradableItems.map(i => `<th class="p-4 min-w-[180px] border-r border-gray-100"><div class="text-xs font-bold text-teal-700 mb-1">${i.context}</div><div class="flex items-center gap-1 font-normal text-gray-500">${getContentEmoji(i.type)} ${i.title}</div></th>`).join('')}</tr></thead><tbody class="divide-y divide-gray-100">`; roster.forEach(student => { const row = gradebook[student.user_id]; tableHtml += `<tr class="hover:bg-gray-50"><td class="p-4 font-medium text-gray-900 sticky left-0 bg-white border-r border-gray-200 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">${row.email}</td>`; gradableItems.forEach(item => { const entry = row.data[item.id]; let cellHtml = '<span class="text-gray-300 text-xs italic">Not started</span>'; if (entry) { if (entry.type === 'quiz') { cellHtml = `<div class="flex flex-col gap-1"><span class="${entry.best.color} px-2 py-0.5 rounded text-xs font-bold">${entry.best.pct}% (${entry.best.label})</span><div class="text-[10px] text-gray-400">Attempts: ${entry.history.length}</div></div>`; } else { cellHtml = `<span class="${entry.grade === 'Pass' ? 'text-green-600 bg-green-50' : (entry.grade==='Fail'?'text-red-600 bg-red-50':'text-yellow-600 bg-yellow-50')} px-2 py-1 rounded font-bold text-xs">${entry.grade}</span>`; } } tableHtml += `<td class="p-3 border-r border-gray-50 align-top">${cellHtml}</td>`; }); tableHtml += `</tr>`; }); tableHtml += `</tbody></table></div>`; el.innerHTML = tableHtml; return; } const { data: assigns } = await sb.from('assignments').select('*').eq('student_id', state.user.id); const { data: quizzes } = await sb.from('quiz_results').select('*').eq('user_id', state.user.id).order('submitted_at', { ascending: true }); const lookup = {}; assigns?.forEach(a => lookup[a.content_id] = { ...a, type: 'assignment' }); const quizLookup = {}; quizzes?.forEach(q => { if(!quizLookup[q.content_id]) quizLookup[q.content_id] = { history: [], best: null }; const info = getGradeInfo(q.score, q.total); quizLookup[q.content_id].history.push({ ...info, date: new Date(q.submitted_at).toLocaleDateString() }); if(!quizLookup[q.content_id].best || info.pct > quizLookup[q.content_id].best.pct) quizLookup[q.content_id].best = info; }); let done = 0; gradableItems.forEach(i => { if (lookup[i.id] || (quizLookup[i.id] && quizLookup[i.id].history.length > 0)) done++; }); const progress = gradableItems.length === 0 ? 0 : Math.round((done/gradableItems.length)*100); let html = `<div class="bg-white p-6 rounded-lg shadow border border-gray-200 mb-6"><div class="flex justify-between items-end mb-2"><h2 class="text-lg font-bold text-gray-700">Your Course Progress</h2><span class="text-2xl font-bold text-teal-600">${progress}%</span></div><div class="w-full bg-gray-200 rounded-full h-3"><div class="bg-teal-500 h-3 rounded-full transition-all" style="width: ${progress}%"></div></div></div><div class="space-y-4">`; sections?.forEach((sec, idx) => { let hasGradable = false; let sectionHtml = `<div class="p-4 border-t border-gray-100 space-y-4">`; sec.modules?.forEach(mod => { mod.units?.forEach(unit => { const graded = unit.content?.filter(c => ['assignment','quiz','simulator'].includes(c.type)) || []; if(graded.length > 0) { hasGradable = true; sectionHtml += `<div class="mb-2"><h5 class="text-xs font-bold text-gray-400 uppercase mb-2">${unit.title}</h5><div class="space-y-3">`; graded.forEach(item => { if(item.type === 'quiz') { const qData = quizLookup[item.id]; if(qData) { sectionHtml += `<div class="bg-white border border-gray-200 p-4 rounded-lg shadow-sm"><div class="flex justify-between items-start"><div><span class="font-bold text-gray-800">${item.title}</span><div class="text-xs text-gray-500 mt-1">Attempts: ${qData.history.length}</div></div><span class="${qData.best.color} px-3 py-1 rounded font-bold text-sm">${qData.best.pct}% (${qData.best.label})</span></div></div>`; } else { sectionHtml += `<div class="bg-white border border-gray-200 p-3 rounded flex justify-between items-center opacity-75"><span class="text-sm text-gray-600">${item.title}</span><span class="text-xs bg-gray-100 text-gray-500 px-2 py-1 rounded">Not Taken</span></div>`; } } else { const data = lookup[item.id]; const status = data ? (data.grade || 'Submitted') : 'Not Started'; const style = data ? (data.grade === 'Pass' ? 'bg-green-100 text-green-800' : (data.grade==='Fail'?'bg-red-100 text-red-800':'bg-yellow-100 text-yellow-800')) : 'bg-gray-100 text-gray-500'; sectionHtml += `<div class="bg-white border border-gray-200 p-3 rounded flex justify-between items-center"><span class="text-sm font-medium text-gray-700">${item.title}</span><span class="${style} px-2 py-1 rounded text-xs font-bold">${status}</span></div>`; } }); sectionHtml += `</div></div>`; } }); }); sectionHtml += `</div>`; if(hasGradable) html += `<details ${idx===0 ? 'open' : ''} class="group bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden"><summary class="flex justify-between items-center p-4 cursor-pointer bg-gray-50 hover:bg-gray-100 list-none"><h3 class="font-bold text-slate-800 flex items-center gap-2"><i class="ph ph-caret-right transition-transform group-open:rotate-90"></i> ${sec.title}</h3></summary>${sectionHtml}</details>`; }); html += `</div>`; el.innerHTML = html; },
+// 5. REPORTS (Unified & Upgraded)
+   // 5. REPORTS (Filtered & Detailed)
+    loadReports: async () => {
+        const el = document.getElementById('tab-reports');
+        el.innerHTML = '<div class="flex justify-center p-8"><i class="ph ph-spinner animate-spin text-3xl text-teal-600"></i></div>';
+
+        // 1. Fetch Data
+        const { data: sections } = await sb.from('sections')
+            .select('id, title, modules(id, title, units(id, title, content(id, title, type)))')
+            .eq('course_id', state.activeCourse.id).order('position');
+
+        // 2. Prepare Items & Filter Options
+        // 2. Prepare Items & Filter Options
+        let gradableItems = [];
+        let modulesMap = new Map(); // Store unique modules for dropdown
+
+        sections?.forEach(s => s.modules?.forEach(m => {
+            // FIX: Don't add to map yet. Wait until we find content.
+            let hasGradableContent = false;
+
+            m.units?.forEach(u => u.content?.forEach(c => {
+                if(['assignment', 'quiz', 'simulator'].includes(c.type)) {
+                    gradableItems.push({ 
+                        id: c.id, 
+                        title: c.title, 
+                        type: c.type, 
+                        moduleId: m.id, 
+                        context: `${m.title} <br> <span class="text-gray-400 font-normal text-[10px] uppercase tracking-wide">${u.title}</span>` 
+                    });
+                    hasGradableContent = true;
+                }
+            }));
+
+            // FIX: Only add module to dropdown if it has gradable items
+            if (hasGradableContent) {
+                modulesMap.set(m.id, m.title);
+            }
+        }));
+
+        // 3. Filter Logic
+        state.reportFilter = state.reportFilter || 'all';
+        const visibleItems = state.reportFilter === 'all' 
+            ? gradableItems 
+            : gradableItems.filter(i => i.moduleId == state.reportFilter);
+
+        const filterHtml = `
+            <select onchange="courseManager.filterReports(this.value)" class="border border-gray-300 p-1.5 rounded text-sm bg-white focus:ring-2 focus:ring-teal-500 outline-none">
+                <option value="all">All Modules</option>
+                ${Array.from(modulesMap.entries()).map(([id, title]) => `<option value="${id}" ${state.reportFilter == id ? 'selected' : ''}>${title}</option>`).join('')}
+            </select>`;
+
+        // 4. ADMIN VIEW (Class Gradebook)
+        if (isAdmin()) {
+            const { data: roster } = await sb.from('enrollments').select('user_id, profiles(email)').eq('course_id', state.activeCourse.id).eq('course_role', 'student');
+            if (!roster || roster.length === 0) { el.innerHTML = '<p class="text-gray-500 p-6">No students enrolled yet.</p>'; return; }
+
+            const itemIds = gradableItems.map(i => i.id);
+            const { data: allAssigns } = await sb.from('assignments').select('*').in('content_id', itemIds);
+            const { data: allQuizzes } = await sb.from('quiz_results').select('*').in('content_id', itemIds).order('submitted_at', { ascending: true });
+
+            const gradebook = {};
+            roster.forEach(s => gradebook[s.user_id] = { email: s.profiles.email, data: {} });
+            
+            allAssigns?.forEach(a => { if(gradebook[a.student_id]) gradebook[a.student_id].data[a.content_id] = { type: 'assignment', grade: a.grade || 'Submitted', attempts: 1 }; });
+            allQuizzes?.forEach(q => { 
+                if(gradebook[q.user_id]) { 
+                    if(!gradebook[q.user_id].data[q.content_id]) gradebook[q.user_id].data[q.content_id] = { type: 'quiz', history: [], best: 0, attempts: 0 }; 
+                    const entry = gradebook[q.user_id].data[q.content_id];
+                    const pct = Math.round((q.score / q.total) * 100);
+                    entry.history.push(pct);
+                    entry.attempts++;
+                    if(pct > entry.best) entry.best = pct;
+                } 
+            });
+
+            // Admin Header
+            let tableHtml = `<div class="flex justify-between items-center mb-4"><h2 class="text-xl font-bold text-gray-800">Class Gradebook</h2><div class="flex gap-2">${filterHtml}<button onclick="courseManager.loadReports()" class="text-sm text-teal-600 hover:underline"><i class="ph ph-arrow-clockwise"></i> Refresh</button></div></div>`;
+            
+            // Admin Table (Using visibleItems)
+            tableHtml += `<div class="overflow-x-auto bg-white rounded-lg shadow border border-gray-200"><table class="w-full text-sm text-left whitespace-nowrap"><thead class="bg-gray-50 text-gray-600 font-bold border-b border-gray-200"><tr><th class="p-4 sticky left-0 bg-gray-50 z-10 border-r">Student</th>${visibleItems.map(i => `<th class="p-4 min-w-[180px] border-r border-gray-100"><div class="text-xs font-bold text-teal-700 mb-1">${i.context}</div><div class="flex items-center gap-1 font-normal text-gray-500">${getContentEmoji(i.type)} ${i.title}</div></th>`).join('')}</tr></thead><tbody class="divide-y divide-gray-100">`;
+            
+            roster.forEach(student => {
+                const row = gradebook[student.user_id];
+                tableHtml += `<tr class="hover:bg-gray-50"><td class="p-4 font-medium text-gray-900 sticky left-0 bg-white border-r border-gray-200 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">${row.email}</td>`;
+                
+                visibleItems.forEach(item => {
+                    const entry = row.data[item.id];
+                    let cellHtml = '<span class="text-gray-300 text-xs italic">Not started</span>';
+                    
+                    if (entry) {
+                        if (entry.type === 'quiz') { 
+                            // Calculate Stats for Admin Cell
+                            const sorted = [...entry.history].slice(-5); // Last 5 (since ordered asc)
+                            const avg = Math.round(sorted.reduce((a,b)=>a+b,0)/sorted.length);
+                            const color = entry.best >= 70 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700';
+                            
+                            cellHtml = `
+                            <div class="flex flex-col gap-1">
+                                <span class="${color} px-2 py-0.5 rounded text-xs font-bold text-center">Best: ${entry.best}%</span>
+                                <div class="flex justify-between text-[10px] text-gray-500 px-1">
+                                    <span>Avg(5): ${avg}%</span>
+                                    <span>Try: ${entry.attempts}</span>
+                                </div>
+                            </div>`; 
+                        } else { 
+                            const color = entry.grade === 'Pass' ? 'text-green-600 bg-green-50' : (entry.grade==='Fail'?'text-red-600 bg-red-50':'text-yellow-600 bg-yellow-50');
+                            cellHtml = `<span class="${color} px-2 py-1 rounded font-bold text-xs">${entry.grade}</span>`; 
+                        }
+                    }
+                    tableHtml += `<td class="p-3 border-r border-gray-50 align-top">${cellHtml}</td>`;
+                });
+                tableHtml += `</tr>`;
+            });
+            tableHtml += `</tbody></table></div>`; el.innerHTML = tableHtml; return;
+        }
+
+        // 5. STUDENT VIEW (Accordions with Detailed Stats)
+        const { data: assigns } = await sb.from('assignments').select('*').eq('student_id', state.user.id);
+        const { data: quizzes } = await sb.from('quiz_results').select('*').eq('user_id', state.user.id).order('submitted_at', { ascending: true });
+        
+        const lookup = {}; 
+        assigns?.forEach(a => lookup[a.content_id] = { ...a, type: 'assignment' });
+        
+        const quizLookup = {}; 
+        quizzes?.forEach(q => { 
+            if(!quizLookup[q.content_id]) quizLookup[q.content_id] = { history: [], best: 0 }; 
+            const info = getGradeInfo(q.score, q.total); 
+            quizLookup[q.content_id].history.push(info.pct); // Store percentages
+            if(info.pct > quizLookup[q.content_id].best) quizLookup[q.content_id].best = info.pct;
+        });
+
+        // Calculate Overall Progress
+        let done = 0; gradableItems.forEach(i => { if (lookup[i.id] || (quizLookup[i.id] && quizLookup[i.id].history.length > 0)) done++; });
+        const progress = gradableItems.length === 0 ? 0 : Math.round((done/gradableItems.length)*100);
+
+        let html = `
+        <div class="bg-white p-6 rounded-lg shadow border border-gray-200 mb-6">
+            <div class="flex justify-between items-end mb-2">
+                <div>
+                    <h2 class="text-lg font-bold text-gray-700">Your Course Progress</h2>
+                    <div class="mt-2">${filterHtml}</div>
+                </div>
+                <span class="text-2xl font-bold text-teal-600">${progress}%</span>
+            </div>
+            <div class="w-full bg-gray-200 rounded-full h-3"><div class="bg-teal-500 h-3 rounded-full transition-all" style="width: ${progress}%"></div></div>
+        </div>
+        <div class="space-y-4">`;
+
+        sections?.forEach((sec, idx) => {
+            // Apply Filter to Sections
+            if (state.reportFilter !== 'all') {
+                const hasModule = sec.modules?.some(m => m.id == state.reportFilter);
+                if (!hasModule) return; // Skip section if no matching module
+            }
+
+            let sectionHtml = `<div class="p-4 border-t border-gray-100 space-y-4">`;
+            let hasContent = false;
+
+            sec.modules?.forEach(mod => { 
+                // Apply Filter to Modules
+                if (state.reportFilter !== 'all' && mod.id != state.reportFilter) return;
+
+                mod.units?.forEach(unit => { 
+                    const graded = unit.content?.filter(c => ['assignment','quiz','simulator'].includes(c.type)) || []; 
+                    if(graded.length > 0) { 
+                        hasContent = true; 
+                        sectionHtml += `<div class="mb-2"><h5 class="text-xs font-bold text-gray-400 uppercase mb-2">${unit.title}</h5><div class="space-y-3">`; 
+                        
+                        graded.forEach(item => { 
+                            if(item.type === 'quiz') { 
+                                const qData = quizLookup[item.id]; 
+                                if(qData) { 
+                                    // CALCULATE AVG LAST 5
+                                    const attempts = qData.history.length;
+                                    const last5 = qData.history.slice(-5);
+                                    const avg = Math.round(last5.reduce((a,b) => a+b, 0) / last5.length);
+                                    const best = qData.best;
+                                    
+                                    // Detailed Quiz Card
+                                    sectionHtml += `
+                                    <div class="bg-white border border-gray-200 p-4 rounded-lg shadow-sm flex flex-col gap-2">
+                                        <div class="flex justify-between items-start">
+                                            <span class="font-bold text-gray-800">${item.title}</span>
+                                            <span class="${best >= 70 ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'} px-3 py-1 rounded font-bold text-sm">Best: ${best}%</span>
+                                        </div>
+                                        <div class="flex gap-4 text-xs text-gray-500 mt-1 border-t pt-2 border-gray-100">
+                                            <div>Attempts: <span class="font-bold text-gray-700">${attempts}</span></div>
+                                            <div>Avg (Last 5): <span class="font-bold text-teal-600">${avg}%</span></div>
+                                        </div>
+                                    </div>`; 
+                                } else { 
+                                    sectionHtml += `<div class="bg-white border border-gray-200 p-3 rounded flex justify-between items-center opacity-75"><span class="text-sm text-gray-600">${item.title}</span><span class="text-xs bg-gray-100 text-gray-500 px-2 py-1 rounded">Not Taken</span></div>`; 
+                                } 
+                            } else { 
+                                // Assignment Logic
+                                const data = lookup[item.id]; 
+                                const status = data ? (data.grade || 'Submitted') : 'Not Started'; 
+                                const style = data ? (data.grade === 'Pass' ? 'bg-green-100 text-green-800' : (data.grade==='Fail'?'bg-red-100 text-red-800':'bg-yellow-100 text-yellow-800')) : 'bg-gray-100 text-gray-500'; 
+                                sectionHtml += `<div class="bg-white border border-gray-200 p-3 rounded flex justify-between items-center"><span class="text-sm font-medium text-gray-700">${item.title}</span><span class="${style} px-2 py-1 rounded text-xs font-bold">${status}</span></div>`; 
+                            } 
+                        }); 
+                        sectionHtml += `</div></div>`; 
+                    } 
+                }); 
+            }); 
+            sectionHtml += `</div>`;
+            
+            if(hasContent) html += `<details ${state.reportFilter !== 'all' || idx===0 ? 'open' : ''} class="group bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden"><summary class="flex justify-between items-center p-4 cursor-pointer bg-gray-50 hover:bg-gray-100 list-none"><h3 class="font-bold text-slate-800 flex items-center gap-2"><i class="ph ph-caret-right transition-transform group-open:rotate-90"></i> ${sec.title}</h3></summary>${sectionHtml}</details>`;
+        });
+        html += `</div>`; el.innerHTML = html;
+    },
+    // NEW: Open History Modal (Used by both Admin and Student)
+    openHistory: (uid, cid) => {
+        if(!state.currentGradebook) return;
+        const student = state.currentGradebook.gradebook[uid];
+        const item = state.currentGradebook.gradableItems.find(i => i.id == cid);
+        const data = student ? student.data[cid] : null;
+
+        if(!item || !data) return ui.toast("No history available", "info");
+
+        document.getElementById('hist-modal-title').innerText = student.email;
+        document.getElementById('hist-modal-subtitle').innerText = `${item.type.toUpperCase()}: ${item.title}`;
+        document.getElementById('modal-student-history').classList.remove('hidden');
+
+        document.getElementById('hist-stat-attempts').innerText = data.history.length;
+
+        if (data.type === 'quiz') {
+            const sorted = [...data.history].sort((a,b) => new Date(b.date) - new Date(a.date));
+            const best = Math.max(...sorted.map(h => h.pct));
+            const last5 = sorted.slice(0, 5);
+            const avg = Math.round(last5.reduce((acc, curr) => acc + curr.pct, 0) / last5.length);
+
+            document.getElementById('hist-stat-best').innerText = `${best}%`;
+            document.getElementById('hist-stat-avg').innerText = `${avg}%`;
+
+            document.getElementById('hist-table-body').innerHTML = sorted.map(h => `
+                <tr class="hover:bg-slate-50 border-b border-gray-50">
+                    <td class="p-2 text-gray-600">${new Date(h.date).toLocaleDateString()} ${new Date(h.date).toLocaleTimeString()}</td>
+                    <td class="p-2 font-mono font-bold">${h.pct}% <span class="text-xs text-gray-400">(${h.score})</span></td>
+                    <td class="p-2"><span class="${h.pct >= 70 ? 'text-green-600 bg-green-50' : 'text-red-600 bg-red-50'} px-2 py-0.5 rounded text-xs font-bold">${h.grade}</span></td>
+                </tr>
+            `).join('');
+        } else {
+            document.getElementById('hist-stat-best').innerText = data.history[0]?.grade || '-';
+            document.getElementById('hist-stat-avg').innerText = '-';
+            
+            document.getElementById('hist-table-body').innerHTML = data.history.map(h => `
+                <tr class="hover:bg-slate-50 border-b border-gray-50">
+                    <td class="p-2 text-gray-600">${new Date(h.date).toLocaleDateString()}</td>
+                    <td class="p-2 font-bold">${h.score}</td>
+                    <td class="p-2"><a href="#" class="text-blue-600 text-xs hover:underline">View File</a></td>
+                </tr>
+            `).join('');
+        }
+    },
+
+    // NEW: Export CSV
+    downloadCSV: () => {
+        if (!state.currentGradebook) return ui.toast("No data to export", "error");
+        const { gradableItems, gradebook } = state.currentGradebook;
+        let csv = 'Student Email,' + gradableItems.map(i => `"${i.label}"`).join(',') + '\n';
+        Object.values(gradebook).forEach(row => {
+            const grades = gradableItems.map(item => {
+                const entry = row.data[item.id];
+                if(!entry) return '-';
+                if(entry.type === 'quiz') return Math.max(...entry.history.map(h => h.pct)) + '%';
+                return entry.history[0]?.grade || 'Submitted';
+            });
+            csv += `${row.email},${grades.join(',')}\n`;
+        });
+        const blob = new Blob([csv], { type: 'text/csv' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'gradebook.csv';
+        a.click();
+    },
+    filterReports: (moduleId) => {
+        state.reportFilter = moduleId;
+        courseManager.loadReports();
+    },
 };
