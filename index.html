@@ -32,6 +32,7 @@
         /* New Scheduler Layout */
         .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); border-top: 1px solid #e2e8f0; border-left: 1px solid #e2e8f0; }
         .cal-cell { min-height: 120px; background: white; border-right: 1px solid #e2e8f0; border-bottom: 1px solid #e2e8f0; position: relative; padding: 4px; }
+        
         /* Updated Scheduler Styles */
         .cal-container { overflow-x: auto; -webkit-overflow-scrolling: touch; }
         .cal-grid { display: grid; grid-template-columns: repeat(7, minmax(100px, 1fr)); border-top: 1px solid #e2e8f0; border-left: 1px solid #e2e8f0; min-width: 700px; /* Force width for mobile scroll */ }
@@ -94,7 +95,7 @@
 
     <div id="app-view" class="h-full flex flex-col hidden">
         
-        <header class="bg-white border-b border-gray-200 h-16 flex items-center justify-between px-6 shadow-sm z-10">
+        <header class="bg-white border-b border-gray-200 h-16 flex items-center justify-between px-6 shadow-sm z-10 shrink-0">
             <div class="flex items-center gap-4">
                 <div class="text-teal-700 text-2xl cursor-pointer" onclick="app.goHome()">
                     <i class="ph ph-house-line"></i>
@@ -116,44 +117,37 @@
             </div>
         </header>
 
-        <main class="flex-1 overflow-auto p-6 relative">
+        <main class="flex-1 overflow-auto p-4 md:p-6 relative">
             
             <div id="dashboard-content" class="fade-in">
-                <div class="flex justify-between items-center mb-6">
-                    <h2 class="text-2xl font-bold text-slate-800">My Courses</h2>
-                    <button id="btn-new-course" class="hidden bg-teal-600 text-white px-4 py-2 rounded shadow hover:bg-teal-700 transition" onclick="entityModal.open('course')">
-                        + New Course
-                    </button>
                 </div>
-                <div id="course-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"></div>
-            </div>
 
-            <div id="course-content" class="hidden fade-in h-full flex flex-col">
-                <div class="mb-4 flex justify-between items-end">
+            <div id="course-content" class="hidden fade-in md:h-full h-auto flex flex-col">
+                <div class="mb-4 flex flex-col md:flex-row md:justify-between md:items-end gap-3">
                     <div>
                         <h1 id="active-course-title" class="text-xl md:text-3xl font-bold text-slate-900">Course Title</h1>
                         <p id="active-course-desc" class="text-slate-500 mt-1">Course Description</p>
                     </div>
                     
-                    <div class="flex gap-2 bg-gray-200 p-1 rounded-lg overflow-x-auto max-w-[200px] md:max-w-none">
-                        <button onclick="ui.switchTab('content')" id="tab-btn-content" class="px-4 py-1.5 rounded-md text-sm font-medium bg-white shadow text-teal-700 whitespace-nowrap">Content</button>
-                        <button onclick="ui.switchTab('team')" id="tab-btn-team" class="px-4 py-1.5 rounded-md text-sm font-medium text-gray-600 hover:text-gray-900 whitespace-nowrap">Team</button>
-                        <button onclick="ui.switchTab('schedule')" id="tab-btn-schedule" class="px-4 py-1.5 rounded-md text-sm font-medium text-gray-600 hover:text-gray-900 hidden whitespace-nowrap">Schedule</button>
-                        <button onclick="ui.switchTab('reports')" id="tab-btn-reports" class="px-4 py-1.5 rounded-md text-sm font-medium text-gray-600 hover:text-gray-900 whitespace-nowrap">Reports</button>
+                    <div class="flex gap-2 bg-gray-200 p-1 rounded-lg overflow-x-auto max-w-full md:max-w-none">
+                        <button onclick="ui.switchTab('content')" id="tab-btn-content" class="px-4 py-1.5 rounded-md text-sm font-medium bg-white shadow text-teal-700 whitespace-nowrap flex-1 md:flex-none">Content</button>
+                        <button onclick="ui.switchTab('team')" id="tab-btn-team" class="px-4 py-1.5 rounded-md text-sm font-medium text-gray-600 hover:text-gray-900 whitespace-nowrap flex-1 md:flex-none">Team</button>
+                        <button onclick="ui.switchTab('schedule')" id="tab-btn-schedule" class="px-4 py-1.5 rounded-md text-sm font-medium text-gray-600 hover:text-gray-900 hidden whitespace-nowrap flex-1 md:flex-none">Schedule</button>
+                        <button onclick="ui.switchTab('reports')" id="tab-btn-reports" class="px-4 py-1.5 rounded-md text-sm font-medium text-gray-600 hover:text-gray-900 whitespace-nowrap flex-1 md:flex-none">Reports</button>
                     </div>
                 </div>
 
-                <div id="tab-content" class="flex-1 bg-white rounded-xl shadow border border-gray-200 overflow-hidden flex flex-col md:flex-row">
-                    <div class="w-full md:w-1/3 h-64 md:h-auto border-b md:border-b-0 md:border-r border-gray-200 bg-gray-50 flex flex-col">
+                <div id="tab-content" class="md:flex-1 w-full bg-white rounded-xl shadow border border-gray-200 md:overflow-hidden overflow-visible flex flex-col md:flex-row h-auto">
+                    <div class="w-full md:w-1/3 min-h-[250px] md:h-auto border-b md:border-b-0 md:border-r border-gray-200 bg-gray-50 flex flex-col">
                         <div class="p-4 border-b border-gray-200 font-semibold text-gray-700 flex justify-between bg-gray-50">
                             <span>Syllabus</span>
                             <button id="btn-add-section" class="text-teal-600 hover:text-teal-800 hidden text-sm" onclick="entityModal.open('section')">+ Section</button>
                         </div>
-                        <div id="syllabus-list" class="overflow-y-auto flex-1 p-2 space-y-2 bg-white"></div>
+                        <div id="syllabus-list" class="overflow-y-auto flex-1 p-2 space-y-2 bg-white max-h-[300px] md:max-h-full"></div>
                     </div>
 
-                    <div class="w-full md:w-2/3 flex flex-col bg-white relative h-full">
-                        <div class="h-14 border-b border-gray-200 flex items-center justify-between px-6 bg-white font-medium text-teal-800 shadow-sm z-10">
+                    <div class="w-full md:w-2/3 flex flex-col bg-white relative md:h-full h-auto">
+                        <div class="h-14 border-b border-gray-200 flex items-center justify-between px-6 bg-white font-medium text-teal-800 shadow-sm z-10 sticky top-0">
                             <span id="current-module-title" class="flex items-center gap-2 text-lg truncate">
                                 <i class="ph ph-squares-four text-gray-400"></i> <span class="text-gray-400 italic">Select a module...</span>
                             </span>
@@ -161,10 +155,11 @@
                                 + Add Unit
                             </button>
                         </div>
-                        <div id="unit-container" class="p-4 md:p-6 overflow-y-auto flex-1 bg-slate-50">
+                        <div id="unit-container" class="p-4 md:p-6 md:overflow-y-auto overflow-visible flex-1 bg-slate-50 min-h-[400px]">
                             <div class="flex flex-col items-center justify-center h-full text-gray-400">
-                                <i class="ph ph-arrow-left text-4xl mb-4 text-gray-300"></i>
-                                <p class="text-lg font-medium">Select a module from the left.</p>
+                                <i class="ph ph-arrow-left text-4xl mb-4 text-gray-300 hidden md:block"></i>
+                                <i class="ph ph-arrow-up text-4xl mb-4 text-gray-300 md:hidden"></i>
+                                <p class="text-lg font-medium">Select a module.</p>
                             </div>
                         </div>
                     </div>
@@ -172,8 +167,8 @@
 
                 <div id="tab-team" class="hidden flex-1 bg-white rounded-xl shadow p-6 overflow-y-auto">Loading...</div>
 
-                <div id="tab-schedule" class="hidden flex-1 flex flex-col md:flex-row gap-4 h-full overflow-hidden">
-                    <div class="w-full md:w-1/4 min-w-[250px] bg-white rounded-xl border border-gray-200 flex flex-col overflow-hidden shadow-sm">
+                <div id="tab-schedule" class="hidden md:flex-1 flex flex-col md:flex-row gap-4 md:h-full h-auto md:overflow-hidden overflow-visible">
+                    <div class="w-full md:w-1/4 min-w-[250px] bg-white rounded-xl border border-gray-200 flex flex-col md:overflow-hidden overflow-visible shadow-sm h-auto">
                         <div class="p-4 bg-gray-50 border-b font-bold text-gray-700 flex justify-between items-center">
                             <span>Planning Queue</span>
                             <span class="text-[10px] bg-blue-100 text-blue-700 px-2 py-1 rounded">DRAG UNITS</span>
@@ -189,10 +184,10 @@
                                 ✨ Other
                             </div>
                         </div>
-                        <div id="scheduler-sidebar" class="flex-1 overflow-y-auto p-3 space-y-4 bg-slate-50"></div>
+                        <div id="scheduler-sidebar" class="md:flex-1 overflow-y-auto p-3 space-y-4 bg-slate-50 max-h-[300px] md:max-h-full"></div>
                     </div>
 
-                    <div id="calCont" class="flex-1 bg-white rounded-xl border border-gray-200 flex flex-col overflow-hidden shadow-sm relative">
+                    <div id="calCont" class="flex-1 bg-white rounded-xl border border-gray-200 flex flex-col md:overflow-hidden overflow-visible shadow-sm relative min-h-[500px]">
                         </div>
                 </div>
 
@@ -201,10 +196,10 @@
         </main>
     </div>
 
-    <div id="modal-add-content" class="fixed inset-0 bg-black/60 hidden z-50 flex items-center justify-center backdrop-blur-sm">
+    <div id="modal-add-content" class="fixed inset-0 bg-black/60 hidden z-50 flex items-center justify-center backdrop-blur-sm p-4">
         <div class="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden transform transition-all scale-100">
             <div class="bg-teal-600 p-4 flex justify-between items-center text-white"><h3 class="font-bold text-lg">Add Content</h3><button onclick="contentModal.close()" class="hover:bg-teal-700 p-1 rounded"><i class="ph ph-x text-xl"></i></button></div>
-            <div class="p-6 space-y-4">
+            <div class="p-6 space-y-4 max-h-[80vh] overflow-y-auto">
                 <div>
                     <label class="block text-sm font-semibold text-gray-700 mb-1">Type</label>
                     <select id="input-content-type" class="w-full border border-gray-300 rounded p-2 bg-white" onchange="contentModal.toggleFields()">
@@ -244,13 +239,13 @@
         </div>
     </div>
 
-    <div id="modal-entity" class="fixed inset-0 bg-black/60 hidden z-50 flex items-center justify-center backdrop-blur-sm">
+    <div id="modal-entity" class="fixed inset-0 bg-black/60 hidden z-50 flex items-center justify-center backdrop-blur-sm p-4">
         <div class="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden">
             <div class="bg-slate-800 p-4 flex justify-between items-center text-white">
                 <h3 id="entity-modal-title" class="font-bold text-lg">Create Item</h3>
                 <button onclick="entityModal.close()" class="hover:text-gray-300"><i class="ph ph-x text-xl"></i></button>
             </div>
-            <div class="p-6 space-y-4">
+            <div class="p-6 space-y-4 max-h-[80vh] overflow-y-auto">
                 <div>
                     <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Title</label>
                     <input type="text" id="entity-title" class="w-full border border-gray-300 rounded p-2 focus:ring-2 focus:ring-teal-500 outline-none">
@@ -298,7 +293,7 @@
         </div>
     </div>
 
-    <div id="modal-submit-assignment" class="fixed inset-0 bg-black/60 hidden z-50 flex items-center justify-center backdrop-blur-sm">
+    <div id="modal-submit-assignment" class="fixed inset-0 bg-black/60 hidden z-50 flex items-center justify-center backdrop-blur-sm p-4">
         <div class="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden">
             <div class="bg-blue-600 p-4 flex justify-between items-center text-white">
                 <h3 class="font-bold text-lg">Submit Assignment</h3>
@@ -316,7 +311,7 @@
         </div>
     </div>
 
-    <div id="modal-grade-assignment" class="fixed inset-0 bg-black/60 hidden z-50 flex items-center justify-center backdrop-blur-sm">
+    <div id="modal-grade-assignment" class="fixed inset-0 bg-black/60 hidden z-50 flex items-center justify-center backdrop-blur-sm p-4">
         <div class="bg-white rounded-xl shadow-2xl w-full max-w-4xl overflow-hidden h-3/4 flex flex-col">
             <div class="bg-purple-700 p-4 flex justify-between items-center text-white">
                 <h3 class="font-bold text-lg">Grade Submissions</h3>
@@ -326,7 +321,7 @@
         </div>
     </div>
 
-    <div id="modal-take-quiz" class="fixed inset-0 bg-black/60 hidden z-50 flex items-center justify-center backdrop-blur-sm">
+    <div id="modal-take-quiz" class="fixed inset-0 bg-black/60 hidden z-50 flex items-center justify-center backdrop-blur-sm p-4">
         <div class="bg-white rounded-xl shadow-2xl w-full max-w-2xl overflow-hidden h-3/4 flex flex-col">
             <div class="bg-indigo-600 p-4 flex justify-between items-center text-white">
                 <h3 id="quiz-title-display" class="font-bold text-lg">Quiz</h3>
@@ -339,7 +334,7 @@
         </div>
     </div>
 
-    <div id="modal-audio" class="fixed inset-0 bg-black/80 hidden z-50 flex items-center justify-center backdrop-blur-sm">
+    <div id="modal-audio" class="fixed inset-0 bg-black/80 hidden z-50 flex items-center justify-center backdrop-blur-sm p-4">
         <div class="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden">
             <div class="bg-gray-900 p-4 flex justify-between items-center text-white">
                 <h3 class="font-bold text-lg flex items-center gap-2">
@@ -359,7 +354,7 @@
             </div>
         </div>
     </div>
-<div id="modal-sched-action" class="fixed inset-0 bg-black/50 hidden z-[60] flex items-center justify-center fade-in">
+<div id="modal-sched-action" class="fixed inset-0 bg-black/50 hidden z-[60] flex items-center justify-center fade-in p-4">
         <div class="bg-white rounded-lg shadow-xl w-80 p-5">
             <h3 class="font-bold text-gray-800 mb-4 flex items-center gap-2"><i class="ph ph-calendar-plus text-teal-600"></i> Schedule Unit</h3>
             <p id="sched-modal-title" class="text-sm text-gray-500 mb-4">Unit Title</p>
@@ -382,7 +377,7 @@
         </div>
     </div>
 
-    <div id="modal-sched-ctx" class="fixed inset-0 bg-black/50 hidden z-[60] flex items-center justify-center fade-in">
+    <div id="modal-sched-ctx" class="fixed inset-0 bg-black/50 hidden z-[60] flex items-center justify-center fade-in p-4">
         <div class="bg-white rounded-lg shadow-xl w-72 overflow-hidden">
             <div class="bg-slate-800 text-white p-3 flex justify-between items-center">
                 <h3 class="font-bold text-sm">Manage Slot</h3>
@@ -415,7 +410,7 @@
             </div>
         </div>
     </div>
-    <div id="modal-viewer" class="fixed inset-0 bg-black/90 hidden z-[60] flex flex-col items-center justify-center backdrop-blur-sm">
+    <div id="modal-viewer" class="fixed inset-0 bg-black/90 hidden z-[60] flex flex-col items-center justify-center backdrop-blur-sm p-4">
         <div class="w-full h-full flex flex-col">
             <div class="bg-gray-900 p-4 flex justify-between items-center text-white shrink-0">
                 <h3 id="viewer-title" class="font-bold text-lg truncate pr-4">Document Viewer</h3>
@@ -430,6 +425,6 @@
         </div>
     </div>
 
-    <script type="module" src="./js/main.js"></script>
+    <script type="module" src="./app.js"></script>
 </body>
 </html>
