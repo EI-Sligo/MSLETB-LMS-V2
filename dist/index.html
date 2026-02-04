@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MSLETB Learning Hub</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    
+    <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css">
+    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
+    
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
+
+    <style>
+        /* Global Scrollbar Styles */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        
+        /* Animations */
+        .fade-in { animation: fadeIn 0.3s ease-in-out; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        
+        .rotate-180 { transform: rotate(180deg); }
+        .transition-transform { transition: transform 0.2s ease-in-out; }
+
+        /* New Scheduler Layout */
+        .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); border-top: 1px solid #e2e8f0; border-left: 1px solid #e2e8f0; }
+        .cal-cell { min-height: 120px; background: white; border-right: 1px solid #e2e8f0; border-bottom: 1px solid #e2e8f0; position: relative; padding: 4px; }
+        /* Updated Scheduler Styles */
+        .cal-container { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+        .cal-grid { display: grid; grid-template-columns: repeat(7, minmax(100px, 1fr)); border-top: 1px solid #e2e8f0; border-left: 1px solid #e2e8f0; min-width: 700px; /* Force width for mobile scroll */ }
+        .cal-cell { min-height: 120px; background: white; border-right: 1px solid #e2e8f0; border-bottom: 1px solid #e2e8f0; position: relative; padding: 24px 4px 4px 4px; }
+        .cal-header { display: grid; grid-template-columns: repeat(7, minmax(100px, 1fr)); background: #f8fafc; font-weight: bold; text-align: center; border-bottom: 1px solid #e2e8f0; font-size: 0.75rem; color: #64748b; padding: 8px 0; min-width: 700px; }
+        .cal-day-num { position: absolute; top: 4px; right: 6px; font-size: 12px; font-weight: 700; color: #94a3b8; }
+        .cal-blocked { background-color: #f1f5f9 !important; background-image: linear-gradient(45deg, #e2e8f0 25%, transparent 25%, transparent 50%, #e2e8f0 50%, #e2e8f0 75%, transparent 75%, transparent); background-size: 10px 10px; cursor: not-allowed; }
+        
+        .slot-item { font-size: 11px; padding: 4px 6px; margin-bottom: 4px; border-radius: 4px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-left: 4px solid; background: white; box-shadow: 0 1px 2px rgba(0,0,0,0.05); transition: all 0.2s; }
+        .slot-item:hover { transform: translateY(-1px); box-shadow: 0 4px 6px rgba(0,0,0,0.1); z-index: 10; position: relative; }
+        
+        /* Progress Bar in Sidebar */
+        .prog-track { background: #e2e8f0; height: 4px; border-radius: 2px; width: 100%; margin-top: 4px; overflow: hidden; }
+        .prog-fill { height: 100%; border-radius: 2px; transition: width 0.3s; }
+    </style>
+  <script type="module" crossorigin src="/assets/main-DTjeZkzs.js"></script>
+  <link rel="modulepreload" crossorigin href="/assets/modulepreload-polyfill-B5Qt9EMX.js">
+</head>
+<body class="bg-slate-50 text-slate-800 font-sans h-screen h-dvh overflow-hidden">
+
+    <div id="login-view" class="h-full w-full flex items-center justify-center bg-teal-700">
+        <div class="bg-white p-8 rounded-lg shadow-2xl w-full max-w-sm mx-4 text-center fade-in">
+            <div class="mb-6 flex justify-center">
+                <div class="h-16 w-16 bg-teal-100 text-teal-600 rounded-full flex items-center justify-center text-3xl">
+                    <i class="ph ph-graduation-cap"></i>
+                </div>
+            </div>
+            <h1 class="text-2xl font-bold text-gray-800 mb-2">MSLETB Hub</h1>
+            <p class="text-gray-500 mb-6 text-sm">Secure Learning Access</p>
+
+            <form id="auth-form" class="space-y-4">
+                <div id="auth-title" class="text-lg font-bold text-purple-600 hidden">Activate Account</div>
+                
+                <input type="email" id="email" placeholder="Email Address" required
+                    class="w-full px-4 py-2 border border-gray-300 rounded focus:outline-none focus:border-teal-500 transition">
+                
+                <div>
+                    <input type="password" id="password" placeholder="Password" required
+                        class="w-full px-4 py-2 border border-gray-300 rounded focus:outline-none focus:border-teal-500 transition">
+                    
+                    <div id="forgot-link-container" class="text-right mt-1">
+                        <a href="#" onclick="auth.resetPassword()" class="text-xs text-gray-500 hover:text-teal-600">Forgot Password?</a>
+                    </div>
+                </div>
+                
+                <button type="submit" id="btn-auth-submit"
+                    class="w-full bg-teal-600 hover:bg-teal-700 text-white font-bold py-2 px-4 rounded transition flex justify-center items-center gap-2">
+                    <span>Sign In</span> <i class="ph ph-sign-in"></i>
+                </button>
+            </form>
+
+            <div class="mt-4 text-sm text-gray-500">
+                <p id="msg-login">
+                    Invited? <a href="#" onclick="authUI.toggleMode('signup')" class="text-teal-600 font-bold hover:underline">Activate Account</a>
+                </p>
+                <p id="msg-signup" class="hidden">
+                    Already active? <a href="#" onclick="authUI.toggleMode('login')" class="text-teal-600 font-bold hover:underline">Sign In</a>
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <div id="app-view" class="h-full flex flex-col hidden">
+        
+        <header class="bg-white border-b border-gray-200 h-16 flex items-center justify-between px-6 shadow-sm z-10">
+            <div class="flex items-center gap-4">
+                <div class="text-teal-700 text-2xl cursor-pointer" onclick="app.goHome()">
+                    <i class="ph ph-house-line"></i>
+                </div>
+                <nav class="flex items-center text-sm text-gray-500">
+                    <span class="hover:text-teal-600 cursor-pointer transition" onclick="app.goHome()">Home</span>
+                    <div id="breadcrumb-container" class="flex items-center"></div>
+                </nav>
+            </div>
+
+            <div class="flex items-center gap-4">
+                <div class="text-right hidden md:block">
+                    <div id="user-name" class="text-sm font-semibold text-gray-800">Loading...</div>
+                    <div id="user-role" class="text-xs text-teal-600 font-bold uppercase tracking-wide">STUDENT</div>
+                </div>
+                <button onclick="auth.signOut()" class="p-2 text-gray-400 hover:text-red-500 transition" title="Logout">
+                    <i class="ph ph-sign-out text-xl"></i>
+                </button>
+            </div>
+        </header>
+
+        <main class="flex-1 overflow-auto p-6 relative">
+            
+            <div id="dashboard-content" class="fade-in">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-2xl font-bold text-slate-800">My Courses</h2>
+                    <button id="btn-new-course" class="hidden bg-teal-600 text-white px-4 py-2 rounded shadow hover:bg-teal-700 transition" onclick="entityModal.open('course')">
+                        + New Course
+                    </button>
+                </div>
+                <div id="course-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"></div>
+            </div>
+
+            <div id="course-content" class="hidden fade-in h-full flex flex-col">
+                <div class="mb-4 flex justify-between items-end">
+                    <div>
+                        <h1 id="active-course-title" class="text-xl md:text-3xl font-bold text-slate-900">Course Title</h1>
+                        <p id="active-course-desc" class="text-slate-500 mt-1">Course Description</p>
+                    </div>
+                    
+                    <div class="flex gap-2 bg-gray-200 p-1 rounded-lg overflow-x-auto max-w-[200px] md:max-w-none">
+                        <button onclick="ui.switchTab('content')" id="tab-btn-content" class="px-4 py-1.5 rounded-md text-sm font-medium bg-white shadow text-teal-700 whitespace-nowrap">Content</button>
+                        <button onclick="ui.switchTab('team')" id="tab-btn-team" class="px-4 py-1.5 rounded-md text-sm font-medium text-gray-600 hover:text-gray-900 whitespace-nowrap">Team</button>
+                        <button onclick="ui.switchTab('schedule')" id="tab-btn-schedule" class="px-4 py-1.5 rounded-md text-sm font-medium text-gray-600 hover:text-gray-900 hidden whitespace-nowrap">Schedule</button>
+                        <button onclick="ui.switchTab('reports')" id="tab-btn-reports" class="px-4 py-1.5 rounded-md text-sm font-medium text-gray-600 hover:text-gray-900 whitespace-nowrap">Reports</button>
+                    </div>
+                </div>
+
+                <div id="tab-content" class="flex-1 bg-white rounded-xl shadow border border-gray-200 overflow-hidden flex flex-col md:flex-row">
+                    <div class="w-full md:w-1/3 h-64 md:h-auto border-b md:border-b-0 md:border-r border-gray-200 bg-gray-50 flex flex-col">
+                        <div class="p-4 border-b border-gray-200 font-semibold text-gray-700 flex justify-between bg-gray-50">
+                            <span>Syllabus</span>
+                            <button id="btn-add-section" class="text-teal-600 hover:text-teal-800 hidden text-sm" onclick="entityModal.open('section')">+ Section</button>
+                        </div>
+                        <div id="syllabus-list" class="overflow-y-auto flex-1 p-2 space-y-2 bg-white"></div>
+                    </div>
+
+                    <div class="w-full md:w-2/3 flex flex-col bg-white relative h-full">
+                        <div class="h-14 border-b border-gray-200 flex items-center justify-between px-6 bg-white font-medium text-teal-800 shadow-sm z-10">
+                            <span id="current-module-title" class="flex items-center gap-2 text-lg truncate">
+                                <i class="ph ph-squares-four text-gray-400"></i> <span class="text-gray-400 italic">Select a module...</span>
+                            </span>
+                            <button id="btn-add-unit" class="text-sm bg-teal-50 text-teal-700 px-3 py-1 rounded border border-teal-200 hidden hover:bg-teal-100 whitespace-nowrap">
+                                + Add Unit
+                            </button>
+                        </div>
+                        <div id="unit-container" class="p-4 md:p-6 overflow-y-auto flex-1 bg-slate-50">
+                            <div class="flex flex-col items-center justify-center h-full text-gray-400">
+                                <i class="ph ph-arrow-left text-4xl mb-4 text-gray-300"></i>
+                                <p class="text-lg font-medium">Select a module from the left.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="tab-team" class="hidden flex-1 bg-white rounded-xl shadow p-6 overflow-y-auto">Loading...</div>
+
+                <div id="tab-schedule" class="hidden flex-1 flex flex-col md:flex-row gap-4 h-full overflow-hidden">
+                    <div class="w-full md:w-1/4 min-w-[250px] bg-white rounded-xl border border-gray-200 flex flex-col overflow-hidden shadow-sm">
+                        <div class="p-4 bg-gray-50 border-b font-bold text-gray-700 flex justify-between items-center">
+                            <span>Planning Queue</span>
+                            <span class="text-[10px] bg-blue-100 text-blue-700 px-2 py-1 rounded">DRAG UNITS</span>
+                        </div>
+                        <div class="p-2 border-b bg-white flex gap-2">
+                             <div draggable="true" ondragstart="schedulerManager.dragMisc(event, 'exam')" class="flex-1 bg-purple-50 border border-purple-200 text-purple-700 text-xs font-bold py-1 px-2 rounded cursor-grab text-center hover:bg-purple-100">
+                                📚 Exam
+                             </div>
+                             <div draggable="true" ondragstart="schedulerManager.dragMisc(event, 'holiday')" class="flex-1 bg-red-50 border border-red-200 text-red-700 text-xs font-bold py-1 px-2 rounded cursor-grab text-center hover:bg-red-100">
+                                🌴 Holiday
+                             </div>
+                             <div draggable="true" ondragstart="schedulerManager.dragMisc(event, 'other')" class="flex-1 bg-gray-100 border border-gray-300 text-gray-700 text-xs font-bold py-1 px-2 rounded cursor-grab text-center hover:bg-gray-200">
+                                ✨ Other
+                            </div>
+                        </div>
+                        <div id="scheduler-sidebar" class="flex-1 overflow-y-auto p-3 space-y-4 bg-slate-50"></div>
+                    </div>
+
+                    <div id="calCont" class="flex-1 bg-white rounded-xl border border-gray-200 flex flex-col overflow-hidden shadow-sm relative">
+                        </div>
+                </div>
+
+                <div id="tab-reports" class="hidden flex-1 bg-white rounded-xl shadow p-6 overflow-y-auto">Loading...</div>
+            </div>
+        </main>
+    </div>
+
+    <div id="modal-add-content" class="fixed inset-0 bg-black/60 hidden z-50 flex items-center justify-center backdrop-blur-sm">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden transform transition-all scale-100">
+            <div class="bg-teal-600 p-4 flex justify-between items-center text-white"><h3 class="font-bold text-lg">Add Content</h3><button onclick="contentModal.close()" class="hover:bg-teal-700 p-1 rounded"><i class="ph ph-x text-xl"></i></button></div>
+            <div class="p-6 space-y-4">
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-1">Type</label>
+                    <select id="input-content-type" class="w-full border border-gray-300 rounded p-2 bg-white" onchange="contentModal.toggleFields()">
+                        <option value="file">📄 Document</option>
+                        <option value="video">🎥 Video</option>
+                        <option value="audio">🎧 Audio</option>
+                        <option value="simulator">⚡ Simulator</option>
+                        <option value="assignment">📝 Assignment Dropzone</option>
+                        <option value="quiz">✅ Quiz</option>
+                        <option value="url">🔗 Web Link</option>
+                    </select>
+                </div>
+                <div><label class="block text-sm font-semibold text-gray-700 mb-1">Title</label><input type="text" id="input-content-title" class="w-full border border-gray-300 rounded p-2"></div>
+                <div id="desc-wrapper" class="hidden"><label class="block text-sm font-semibold text-gray-700 mb-1">Instructions</label><textarea id="input-content-desc" class="w-full border border-gray-300 rounded p-2 text-sm h-24"></textarea></div>
+                
+                <div id="quiz-wrapper" class="hidden border-t pt-4">
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">Quiz Questions</label>
+                    
+                    <div class="mb-4 p-3 bg-blue-50 rounded border border-blue-100">
+                        <p class="text-xs text-blue-700 font-bold mb-1">Option A: Upload Question Bank (.json)</p>
+                        <input type="file" id="input-quiz-json" accept=".json" class="block w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-blue-100 file:text-blue-700 hover:file:bg-blue-200"/>
+                        <p class="text-[10px] text-gray-500 mt-1">File must contain an array of questions.</p>
+                    </div>
+
+                    <div class="border-t border-blue-100 pt-2">
+                        <p class="text-xs text-gray-500 font-bold mb-2">Option B: Manually Add Questions</p>
+                        <div id="quiz-questions-list" class="space-y-2 mb-2 max-h-48 overflow-y-auto"></div>
+                        <button onclick="quizManager.addQuestionUI()" class="text-sm text-teal-600 font-bold hover:underline flex items-center gap-1">
+                            <i class="ph ph-plus-circle"></i> Add Question manually
+                        </button>
+                    </div>
+                </div>
+
+                <div id="source-wrapper"><label id="lbl-source" class="block text-sm font-semibold text-gray-700 mb-2">Source</label><div class="flex gap-4 mb-3"><label class="flex items-center gap-2 cursor-pointer"><input type="radio" name="source" value="upload" checked onchange="contentModal.toggleFields()" class="text-teal-600"><span>Upload</span></label><label class="flex items-center gap-2 cursor-pointer"><input type="radio" name="source" value="url" onchange="contentModal.toggleFields()" class="text-teal-600"><span>Link</span></label></div><input type="url" id="input-content-url" placeholder="https://..." class="hidden w-full border border-gray-300 rounded p-2"><div id="file-upload-ui"><input type="file" id="input-content-file" class="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-teal-50 file:text-teal-700 hover:file:bg-teal-100"/></div></div>
+            </div>
+            <div class="p-4 bg-gray-50 border-t flex justify-end gap-2"><button onclick="contentModal.close()" class="px-4 py-2 text-gray-600">Cancel</button><button id="btn-save-content" onclick="contentModal.save()" class="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded font-medium">Save</button></div>
+        </div>
+    </div>
+
+    <div id="modal-entity" class="fixed inset-0 bg-black/60 hidden z-50 flex items-center justify-center backdrop-blur-sm">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden">
+            <div class="bg-slate-800 p-4 flex justify-between items-center text-white">
+                <h3 id="entity-modal-title" class="font-bold text-lg">Create Item</h3>
+                <button onclick="entityModal.close()" class="hover:text-gray-300"><i class="ph ph-x text-xl"></i></button>
+            </div>
+            <div class="p-6 space-y-4">
+                <div>
+                    <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Title</label>
+                    <input type="text" id="entity-title" class="w-full border border-gray-300 rounded p-2 focus:ring-2 focus:ring-teal-500 outline-none">
+                </div>
+                
+                <div id="entity-desc-wrapper">
+                    <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Description (Optional)</label>
+                    <textarea id="entity-desc" class="w-full border border-gray-300 rounded p-2 focus:ring-2 focus:ring-teal-500 outline-none h-20 text-sm"></textarea>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-gray-500 uppercase mb-2">Cover Image (Optional)</label>
+                    <div class="flex gap-4 mb-2">
+                        <label class="flex items-center gap-2 cursor-pointer">
+                            <input type="radio" name="entity-img-source" value="upload" checked onchange="entityModal.toggleImageSource()" class="text-teal-600">
+                            <span class="text-sm">Upload</span>
+                        </label>
+                        <label class="flex items-center gap-2 cursor-pointer">
+                            <input type="radio" name="entity-img-source" value="url" onchange="entityModal.toggleImageSource()" class="text-teal-600">
+                            <span class="text-sm">URL</span>
+                        </label>
+                    </div>
+                    
+                    <input type="file" id="entity-image-file" accept="image/*" class="block w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-slate-100 file:text-slate-700 hover:file:bg-slate-200"/>
+                    
+                    <input type="url" id="entity-image-url" placeholder="https://example.com/image.jpg" class="hidden w-full border border-gray-300 rounded p-2 text-sm">
+                </div>
+
+                <div id="entity-extra-fields" class="border-t pt-4 mt-4">
+                    <label class="flex items-center gap-2 cursor-pointer mb-4">
+                        <input type="checkbox" id="entity-visible" class="rounded text-teal-600 focus:ring-teal-500" checked>
+                        <span class="text-sm font-semibold text-gray-700">Visible to Students?</span>
+                    </label>
+
+                    <div id="entity-hours-wrapper" class="hidden">
+                        <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Total Hours Required</label>
+                        <input type="number" id="entity-hours" step="0.5" class="w-full border border-gray-300 rounded p-2 text-sm" placeholder="e.g. 20.5">
+                    </div>
+                </div>
+            </div>
+            <div class="p-4 bg-gray-50 border-t flex justify-end gap-2">
+                <button onclick="entityModal.close()" class="px-4 py-2 text-gray-600 text-sm font-medium">Cancel</button>
+                <button onclick="entityModal.save()" id="btn-save-entity" class="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded text-sm font-bold shadow-sm">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="modal-submit-assignment" class="fixed inset-0 bg-black/60 hidden z-50 flex items-center justify-center backdrop-blur-sm">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden">
+            <div class="bg-blue-600 p-4 flex justify-between items-center text-white">
+                <h3 class="font-bold text-lg">Submit Assignment</h3>
+                <button onclick="assignmentManager.closeSubmit()" class="hover:bg-blue-700 p-1 rounded"><i class="ph ph-x text-xl"></i></button>
+            </div>
+            <div class="p-6 space-y-4">
+                <p class="text-sm text-gray-600">Upload your completed work (PDF, Screenshot, or Doc).</p>
+                <input type="file" id="input-submit-file" class="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"/>
+                <textarea id="input-submit-comment" placeholder="Add a comment (optional)..." class="w-full border border-gray-300 rounded p-2 text-sm h-24"></textarea>
+            </div>
+            <div class="p-4 bg-gray-50 border-t border-gray-200 flex justify-end gap-2">
+                <button onclick="assignmentManager.closeSubmit()" class="px-4 py-2 text-gray-600 hover:text-gray-800 font-medium">Cancel</button>
+                <button onclick="assignmentManager.submit()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded font-medium shadow-sm transition">Upload & Submit</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="modal-grade-assignment" class="fixed inset-0 bg-black/60 hidden z-50 flex items-center justify-center backdrop-blur-sm">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-4xl overflow-hidden h-3/4 flex flex-col">
+            <div class="bg-purple-700 p-4 flex justify-between items-center text-white">
+                <h3 class="font-bold text-lg">Grade Submissions</h3>
+                <button onclick="assignmentManager.closeGrading()" class="hover:bg-purple-800 p-1 rounded"><i class="ph ph-x text-xl"></i></button>
+            </div>
+            <div id="grading-list" class="flex-1 overflow-y-auto p-6 bg-gray-50"></div>
+        </div>
+    </div>
+
+    <div id="modal-take-quiz" class="fixed inset-0 bg-black/60 hidden z-50 flex items-center justify-center backdrop-blur-sm">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-2xl overflow-hidden h-3/4 flex flex-col">
+            <div class="bg-indigo-600 p-4 flex justify-between items-center text-white">
+                <h3 id="quiz-title-display" class="font-bold text-lg">Quiz</h3>
+                <button onclick="quizManager.closeTakeQuiz()" class="hover:bg-indigo-700 p-1 rounded"><i class="ph ph-x text-xl"></i></button>
+            </div>
+            <div id="quiz-body" class="flex-1 overflow-y-auto p-8 bg-gray-50 space-y-6"></div>
+            <div class="p-4 bg-white border-t flex justify-end">
+                <button onclick="quizManager.submitQuiz()" class="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded font-bold shadow">Submit Answers</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="modal-audio" class="fixed inset-0 bg-black/80 hidden z-50 flex items-center justify-center backdrop-blur-sm">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden">
+            <div class="bg-gray-900 p-4 flex justify-between items-center text-white">
+                <h3 class="font-bold text-lg flex items-center gap-2">
+                    <i class="ph ph-speaker-high text-teal-400"></i> Audio Player
+                </h3>
+                <button onclick="courseManager.closeAudio()" class="hover:text-red-400 transition">
+                    <i class="ph ph-x text-xl"></i>
+                </button>
+            </div>
+            <div class="p-8 flex flex-col items-center justify-center bg-gray-100">
+                <div class="h-24 w-24 bg-teal-100 rounded-full flex items-center justify-center text-teal-600 mb-6 shadow-inner animate-pulse">
+                    <i class="ph ph-music-notes text-4xl"></i>
+                </div>
+                <audio id="audio-player" controls class="w-full shadow-sm rounded-lg block h-12" preload="metadata">
+                    Your browser does not support the audio element.
+                </audio>
+            </div>
+        </div>
+    </div>
+<div id="modal-sched-action" class="fixed inset-0 bg-black/50 hidden z-[60] flex items-center justify-center fade-in">
+        <div class="bg-white rounded-lg shadow-xl w-80 p-5">
+            <h3 class="font-bold text-gray-800 mb-4 flex items-center gap-2"><i class="ph ph-calendar-plus text-teal-600"></i> Schedule Unit</h3>
+            <p id="sched-modal-title" class="text-sm text-gray-500 mb-4">Unit Title</p>
+            
+            <label class="block text-xs font-bold text-gray-700 uppercase mb-1">Hours for this day</label>
+            <input type="number" id="sched-input-hours" step="0.5" class="w-full border border-gray-300 rounded p-2 mb-4 focus:ring-2 focus:ring-teal-500 outline-none">
+            
+            <div class="flex items-start gap-2 mb-6">
+                <input type="checkbox" id="sched-input-insert" class="mt-1 text-teal-600 focus:ring-teal-500">
+                <div>
+                    <label for="sched-input-insert" class="text-sm font-bold text-gray-800 cursor-pointer">Insert & Shift</label>
+                    <p class="text-[10px] text-gray-500 leading-tight">Push all future items forward by 1 working day.</p>
+                </div>
+            </div>
+            
+            <div class="flex justify-end gap-2">
+                <button onclick="document.getElementById('modal-sched-action').classList.add('hidden')" class="px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100 rounded">Cancel</button>
+                <button id="btn-sched-confirm" class="px-3 py-1.5 text-sm bg-teal-600 text-white rounded font-bold hover:bg-teal-700 shadow-sm">Confirm</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="modal-sched-ctx" class="fixed inset-0 bg-black/50 hidden z-[60] flex items-center justify-center fade-in">
+        <div class="bg-white rounded-lg shadow-xl w-72 overflow-hidden">
+            <div class="bg-slate-800 text-white p-3 flex justify-between items-center">
+                <h3 class="font-bold text-sm">Manage Slot</h3>
+                <button onclick="document.getElementById('modal-sched-ctx').classList.add('hidden')" class="hover:text-gray-300"><i class="ph ph-x"></i></button>
+            </div>
+            <div class="p-4 bg-gray-50 border-b">
+                <p id="ctx-item-title" class="font-bold text-gray-800 text-sm truncate">Unit Title</p>
+                <p id="ctx-item-date" class="text-xs text-gray-500">Date</p>
+            </div>
+            <div class="p-2 space-y-1">
+                <button id="btn-ctx-delete" class="w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded flex items-center gap-2 font-medium">
+                    <i class="ph ph-trash"></i> Delete Slot
+                </button>
+                <div class="h-px bg-gray-200 my-1"></div>
+                <div class="px-3 py-1 text-[10px] font-bold text-gray-400 uppercase">Global Shift (All Items)</div>
+                <button id="btn-ctx-global-back" class="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded flex items-center gap-2">
+                    <i class="ph ph-arrow-left"></i> Back 1 Day
+                </button>
+                <button id="btn-ctx-global-fwd" class="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded flex items-center gap-2">
+                    <i class="ph ph-arrow-right"></i> Forward 1 Day
+                </button>
+                <div class="h-px bg-gray-200 my-1"></div>
+                <div class="px-3 py-1 text-[10px] font-bold text-gray-400 uppercase">Module Shift (This Subject)</div>
+                <button id="btn-ctx-mod-back" class="w-full text-left px-3 py-2 text-sm text-blue-700 hover:bg-blue-50 rounded flex items-center gap-2">
+                    <i class="ph ph-arrow-left"></i> Back 1 Day
+                </button>
+                <button id="btn-ctx-mod-fwd" class="w-full text-left px-3 py-2 text-sm text-blue-700 hover:bg-blue-50 rounded flex items-center gap-2">
+                    <i class="ph ph-arrow-right"></i> Forward 1 Day
+                </button>
+            </div>
+        </div>
+    </div>
+    <div id="modal-viewer" class="fixed inset-0 bg-black/90 hidden z-[60] flex flex-col items-center justify-center backdrop-blur-sm">
+        <div class="w-full h-full flex flex-col">
+            <div class="bg-gray-900 p-4 flex justify-between items-center text-white shrink-0">
+                <h3 id="viewer-title" class="font-bold text-lg truncate pr-4">Document Viewer</h3>
+                <div class="flex gap-4">
+                    <a id="viewer-download-btn" href="#" target="_blank" class="hidden text-sm bg-teal-600 px-3 py-1 rounded hover:bg-teal-700 items-center gap-2">
+                        <i class="ph ph-download-simple"></i> Download
+                    </a>
+                    <button onclick="courseManager.closeViewer()" class="hover:text-red-400 text-2xl"><i class="ph ph-x"></i></button>
+                </div>
+            </div>
+            <div id="viewer-body" class="flex-1 bg-gray-800 relative w-full h-full flex items-center justify-center overflow-hidden"></div>
+        </div>
+    </div>
+
+</body>
+</html>
