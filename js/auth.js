@@ -9,11 +9,32 @@ export const auth = {
         if (session) { state.user = session.user; await auth.loadProfile(); app.showApp(); } 
         else { app.showLogin(); }
     },
+    
     signIn: async (email, password) => {
         const { data, error } = await sb.auth.signInWithPassword({ email, password });
         if (error) ui.toast(error.message, 'error');
         else { state.user = data.user; await auth.loadProfile(); app.showApp(); }
     },
+
+    // ADDED: Fixes 'auth.resetPassword is not a function' error
+    resetPassword: async () => {
+        let email = document.getElementById('email')?.value;
+        if (!email) {
+            email = prompt("Please enter your email address to reset your password:");
+        }
+        
+        if (!email) return; // User cancelled or didn't enter email
+
+        ui.toast("Sending reset email...", "info");
+        
+        const { error } = await sb.auth.resetPasswordForEmail(email, {
+            redirectTo: window.location.href // Returns user to this app after clicking email link
+        });
+
+        if (error) ui.toast(error.message, 'error');
+        else ui.toast("Password reset email sent! Check your inbox.", "success");
+    },
+
     loadProfile: async () => {
         let { data } = await sb.from('profiles').select('*').eq('id', state.user.id).maybeSingle();
         if (!data) { const { data: n } = await sb.from('profiles').insert([{ id: state.user.id, email: state.user.email, global_role: 'student' }]).select().single(); data = n; }
@@ -28,6 +49,7 @@ export const auth = {
         document.getElementById('btn-new-course')?.classList.toggle('hidden', data.global_role !== 'super_admin');
         document.getElementById('tab-btn-reports').classList.remove('hidden');
     },
+    
     signOut: async () => { await sb.auth.signOut(); }
 };
 
