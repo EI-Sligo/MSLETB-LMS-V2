@@ -4,31 +4,41 @@ import { isAdmin } from './utils.js';
 
 export const auth = {
     init: async () => {
-        // 1. Listen for Auth Changes (including Password Recovery)
+        // 1. CHECK FOR RESET LINK ERRORS (Fixes "otp_expired" confusion)
+        if (window.location.hash && window.location.hash.includes('error=')) {
+            const params = new URLSearchParams(window.location.hash.substring(1));
+            const errorDesc = params.get('error_description');
+            if (errorDesc) {
+                ui.toast(errorDesc.replace(/\+/g, ' '), 'error');
+                // Clean the URL so the error doesn't persist
+                window.history.replaceState(null, '', window.location.pathname);
+            }
+        }
+
+        // 2. LISTEN FOR PASSWORD RECOVERY EVENT
         sb.auth.onAuthStateChange(async (event, session) => {
             if (event === 'PASSWORD_RECOVERY') {
-                // This runs when the user clicks the reset link
-                const newPass = prompt("Please enter your new password:");
+                // This runs only when the user clicks the valid email link
+                const newPass = prompt("Enter your new password:");
                 if (newPass) {
                     const { error } = await sb.auth.updateUser({ password: newPass });
                     if (error) {
                         ui.toast(error.message, 'error');
                     } else {
                         alert("Password updated successfully!");
-                        window.location.href = "/"; // Clear the recovery hash from URL
+                        window.location.href = "/"; // Clear recovery hash
                     }
                 }
             } else if (event === 'SIGNED_OUT') {
                 app.showLogin();
             } else if (event === 'SIGNED_IN' && session) {
-                // Standard login flow
                 state.user = session.user;
                 await auth.loadProfile();
                 app.showApp();
             }
         });
 
-        // 2. Check if already logged in (Initial Load)
+        // 3. CHECK EXISTING SESSION
         const { data: { session } } = await sb.auth.getSession();
         if (session) { 
             state.user = session.user; 
@@ -42,9 +52,10 @@ export const auth = {
     signIn: async (email, password) => {
         const { data, error } = await sb.auth.signInWithPassword({ email, password });
         if (error) ui.toast(error.message, 'error');
-        // onAuthStateChange will handle the success case
+        // onAuthStateChange handles success
     },
 
+    // --- RESTORED FUNCTION ---
     resetPassword: async () => {
         let email = document.getElementById('email')?.value;
         if (!email) {
@@ -56,7 +67,7 @@ export const auth = {
         ui.toast("Sending reset email...", "info");
         
         const { error } = await sb.auth.resetPasswordForEmail(email, {
-            redirectTo: window.location.href // Ensures they come back to this page
+            redirectTo: window.location.href 
         });
 
         if (error) ui.toast(error.message, 'error');
