@@ -5,235 +5,271 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ElectroLab v3.0 - Professional</title>
     
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Inter', 'sans-serif'], mono: ['JetBrains Mono', 'monospace'] },
+                    colors: { brand: { 600: '#4f46e5', 500: '#6366f1' }, slate: { 850: '#1e293b' } }
+                }
+            }
+        }
+    </script>
 
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <link rel="stylesheet" href="style.css">
 
     <script>
+        // Security Check (Preserved)
         const params = new URLSearchParams(window.location.search);
-        // We now also look for 'uid' to know which user is saving files
         if (params.get('auth') !== 'msletb_secure_launch') {
-            document.body.innerHTML = `
-                <div style="display:flex;height:100vh;justify-content:center;align-items:center;background:#0f172a;color:white;font-family:sans-serif;text-align:center;">
-                    <div>
-                        <h1 style="color:#ef4444;font-size:3rem;">🚫 Access Denied</h1>
-                        <p>You must launch this simulator from the MSLETB Learner Portal.</p>
-                        <a href="../index.html" style="color:#3b82f6;text-decoration:underline;">Go to Login</a>
-                    </div>
-                </div>
-            `;
+            document.body.innerHTML = `<div class="flex h-screen w-full items-center justify-center bg-slate-900 text-white font-sans text-center"><div class="p-8"><div class="text-6xl mb-4">🚫</div><h1 class="text-3xl font-bold text-red-500 mb-2">Access Denied</h1><p class="text-slate-400">Launch this simulator from the MSLETB Learner Portal.</p></div></div>`;
             throw new Error("Unauthorized Access");
         }
     </script>
 </head>
-<body>
+<body class="bg-slate-50 h-screen w-screen overflow-hidden relative select-none">
 
-    <div id="sidebar">
-        <div class="header">
-            <h1>⚡ ElectroLab v3</h1>
-        </div>
-        
-        <div class="sidebar-tabs">
-            <button id="btn-tab-components" class="tab-btn active" onclick="App.switchTab('components')">Components</button>
-            <button id="btn-tab-levels" class="tab-btn" onclick="App.switchTab('levels')">Scenarios & Saves</button>
-        </div>
-        
-        <div id="tab-components" class="palette-scroll tab-content active">
-            <div class="palette-section">
-                <h3>🏠 Mains & Protection</h3>
-                <button class="palette-btn" onclick="App.addComponent('db_board')">DB Board Enclosure</button>
-                <button class="palette-btn" onclick="App.addComponent('service_head')">Mains Head</button>
-                <button class="palette-btn" onclick="App.addComponent('main_fuse')">Main Fuse</button>
-                <button class="palette-btn" onclick="App.addComponent('rcd')">RCD</button>
-                <button class="palette-btn" onclick="App.addComponent('spd_module')">SPD (Surge)</button>
-                <button class="palette-btn" onclick="App.addComponent('earth_bar')">Earth Bar</button>
-                <button class="palette-btn" onclick="App.addComponent('neutral_bar')">Neutral Bar</button>
-                <button class="palette-btn" onclick="App.addComponent('main_switch_100a')">Main Switch 100A</button>
-                
-                <div style="margin: 5px 0; border-top: 1px dashed #cbd5e1;"></div>
-                
-                <button class="palette-btn" onclick="App.addComponent('mcb_b6')">MCB B6</button>
-                <button class="palette-btn" onclick="App.addComponent('mcb_b10')">MCB B10</button>
-                <button class="palette-btn" onclick="App.addComponent('mcb_b16')">MCB B16</button>
-                <button class="palette-btn" onclick="App.addComponent('mcb_b20')">MCB B20</button>
-                <button class="palette-btn" onclick="App.addComponent('mcb_b32')">MCB B32</button>
-                <button class="palette-btn" onclick="App.addComponent('mcb_b40')">MCB B40</button>
-                <button class="palette-btn" onclick="App.addComponent('mcb_b50')">MCB B50</button>
-                
-                <div style="margin: 5px 0; border-top: 1px dashed #cbd5e1;"></div>
-
-                <button class="palette-btn" onclick="App.addComponent('rcbo_b6')">RCBO B6</button>
-                <button class="palette-btn" onclick="App.addComponent('rcbo_b10')">RCBO B10</button>
-                <button class="palette-btn" onclick="App.addComponent('rcbo_b16')">RCBO B16</button>
-                <button class="palette-btn" onclick="App.addComponent('rcbo_b20')">RCBO B20</button>
-                <button class="palette-btn" onclick="App.addComponent('rcbo_b32')">RCBO B32</button>
-                <button class="palette-btn" onclick="App.addComponent('rcbo_b40')">RCBO B40</button>
-                <button class="palette-btn" onclick="App.addComponent('rcbo_b50')">RCBO B50</button>
-                
-                <button class="palette-btn" style="margin-top:5px" onclick="App.addComponent('contactor_2no')">Contactor 2-Pole</button>
-            </div>
-
-            <div class="palette-section">
-                <h3>💡 Switches & Loads</h3>
-                <button class="palette-btn" onclick="App.addComponent('sw_1way')">Switch 1-Way</button>
-                <button class="palette-btn" onclick="App.addComponent('sw_2way')">Switch 2-Way</button>
-                <button class="palette-btn" onclick="App.addComponent('sw_inter')">Intermediate Switch</button>
-                <button class="palette-btn" onclick="App.addComponent('fcu')">Switched Fused Spur</button> 
-                <button class="palette-btn" onclick="App.addComponent('smoke_alarm')">Mains Smoke Alarm</button> 
-                <button class="palette-btn" onclick="App.addComponent('lamp')">Lamp</button>
-                <button class="palette-btn" onclick="App.addComponent('socket')">Socket</button>
-                <button class="palette-btn" onclick="App.addComponent('junction_box')">Junction Box</button>
-            </div>
-
-            <div class="palette-section">
-                <h3>🍳 High Power</h3>
-                <button class="palette-btn" onclick="App.addComponent('cooker_sw')">Cooker Switch</button>
-                <button class="palette-btn" onclick="App.addComponent('sw_sink_bath')">Immersion Switch</button>
-                <button class="palette-btn" onclick="App.addComponent('immersion_dual')">Dual Immersion</button>
-                <button class="palette-btn" onclick="App.addComponent('fan')">Extractor Fan</button>
-            </div>
-
-            <div class="palette-section">
-                <h3>☀️ Renewables & Hybrid</h3>
-                <button class="palette-btn" onclick="App.addComponent('pv_panel')">PV Panel (All Black)</button>
-                <button class="palette-btn" onclick="App.addComponent('wind_turbine')">Wind Turbine</button>
-                <button class="palette-btn" onclick="App.addComponent('inverter')">Hybrid Inverter (Solis)</button>
-                <button class="palette-btn" onclick="App.addComponent('battery_ac')">Tesla Powerwall</button>
-                <button class="palette-btn" onclick="App.addComponent('battery_dc')">DC Battery (Lithium)</button>
-                <button class="palette-btn" onclick="App.addComponent('ev_charger')">Zappi Charger</button>
-                <button class="palette-btn" onclick="App.addComponent('changeover_switch')">Changeover Switch (DIN)</button>
-                <button class="palette-btn" onclick="App.addComponent('fireman_switch')">Fireman's Switch</button>
-                <button class="palette-btn" onclick="App.addComponent('dc_iso')">DC Isolator</button>
-                <button class="palette-btn" onclick="App.addComponent('gen_meter')">Generation Meter</button>
-                <button class="palette-btn" onclick="App.addComponent('smart_meter')">Smart Meter (DIN)</button>
-            </div>
-
-            <div class="palette-section">
-                <h3>🏭 Industrial Power</h3>
-                <button class="palette-btn" onclick="App.addComponent('supply_3ph')">3-Phase Supply</button>
-                <button class="palette-btn" onclick="App.addComponent('db_3ph')">TPN Distribution Board</button>
-                <button class="palette-btn" onclick="App.addComponent('control_panel')">Control Panel (Enclosure)</button>
-                <button class="palette-btn" onclick="App.addComponent('mcb_3ph')">3-Phase MCB</button>
-                <button class="palette-btn" onclick="App.addComponent('contactor_3ph')">Contactor 3-Pole</button>
-                <button class="palette-btn" onclick="App.addComponent('isolator_3ph')">Isolator 3PH</button>
-                <button class="palette-btn" onclick="App.addComponent('motor_3ph')">Motor 3PH</button>
-                <button class="palette-btn" onclick="App.addComponent('commando_socket')">415V Socket</button>
-                <button class="palette-btn" onclick="App.addComponent('estop')">Emergency Stop</button>
-                <button class="palette-btn" onclick="App.addComponent('high_bay')">High Bay Light</button>
-            </div>
-
-            <div class="palette-section">
-                <h3>🎛️ Industrial Control (24V)</h3>
-                <button class="palette-btn" onclick="App.addComponent('plc_psu')">24V PSU (DIN)</button>
-                <button class="palette-btn" onclick="App.addComponent('btn_start')">Push Button (NO)</button>
-                <button class="palette-btn" onclick="App.addComponent('btn_stop')">Push Button (NC)</button>
-                <button class="palette-btn" onclick="App.addComponent('sw_man_auto')">Hand/Off/Auto</button>
-                <button class="palette-btn" onclick="App.addComponent('pilot_green')">Pilot Light (Green)</button>
-                <button class="palette-btn" onclick="App.addComponent('pilot_red')">Pilot Light (Red)</button>
-                <button class="palette-btn" onclick="App.addComponent('plc_mini')">PLC</button>
-            </div>
-        </div>
-
-        <div id="tab-levels" class="tab-content">
-            <div id="level-list-container"></div>
-        </div>
-
-        <div class="meter-panel">
-            <div id="meter-display">---</div>
-            <div class="meter-controls">
-                <button id="btn-meter-v" onclick="Meter.setMode('volts')">V~</button>
-                <button id="btn-meter-o" onclick="Meter.setMode('ohms')">Ω</button>
-                <button id="btn-meter-m" onclick="Meter.setMode('megger')">MΩ</button>
-                <button id="btn-meter-off" onclick="Meter.setMode('off')" class="active">OFF</button>
-            </div>
-        </div>
-
-        <div class="controls">
-            <label class="control-label">Wire Type / Colour:</label>
-            <select id="cable-select" onchange="App.setCable(this.value)">
-                <optgroup label="Standard Twin & Earth (Live)">
-                    <option value="1.0">1.0 mm² </option>
-                    <option value="1.5">1.5 mm² </option>
-                    <option value="2.5" selected>2.5 mm² </option>
-                    <option value="4.0">4.0 mm² </option>
-                    <option value="6.0">6.0 mm² </option>
-                    <option value="10.0">10.0 mm² </option>
-                    <option value="16.0">16.0 mm² </option>
-                    <option value="25.0">25.0 mm² </option>
-                </optgroup>
-                <optgroup label="Specific Colors">
-                    <option value="neutral">Neutral (Blue)</option>
-                    <option value="earth">Earth (G/Y)</option>
-                    <option value="phase_l2">3-Phase L2 (Black)</option>
-                    <option value="phase_l3">3-Phase L3 (Grey)</option>
-                    <option value="control_pos">Control +24V (Red)</option>
-                    <option value="control_neg">Control 0V (Blue)</option>
-                </optgroup>
-            </select>
-
-            <button id="btn-power" onclick="App.togglePower()">🔌 Power ON</button>
-            
-            <div style="display:flex; gap:5px;">
-                <button class="btn-secondary" onclick="App.saveToCloud()">☁️ Save</button>
-                <button class="btn-secondary" onclick="App.clear()">🗑️ Clear</button>
-				<button class="btn-secondary" style="border-color:#16a34a; color:#16a34a;" onclick="App.submitToLMS()">📤 Submit to Class</button>
-            </div>
-        </div>
-    </div> 
-
-    <div id="main">
-        <div id="toolbar">
-            <div class="toolbar-left">
-                <button id="btn-input-mode" onclick="App.toggleInputMode()">🖱️ Input: MOUSE</button>
-                
-                <div style="border-left:1px solid #cbd5e1; padding-left:10px; display:flex; gap:5px;">
-                    <button id="btn-mode-interact" class="active" onclick="App.setToolMode('interact')">👆 Interact</button>
-                    <button id="btn-mode-wire" onclick="App.setToolMode('wire')">🔌 Wire Mode</button>
-                    <button id="btn-mode-move" onclick="App.setToolMode('move')">✋ Move</button>
-                </div>
-
-                <button id="btn-wire-order" onclick="App.toggleWireOrder()" style="margin-left:10px;">🔃 Layers</button>
-                <button id="btn-flow" onclick="App.toggleFlowMode()" style="margin-left:5px;">🌊 Flow: OFF</button>
-            </div>
-            <div id="hint-text">Select a mode to begin.</div>
-        </div>
-
-        <canvas id="simCanvas"></canvas>
+    <div id="main" class="absolute inset-0 z-0 bg-[url('https://www.transparenttextures.com/patterns/graphy.png')] bg-slate-50">
+        <canvas id="simCanvas" class="block w-full h-full cursor-crosshair touch-none"></canvas>
     </div>
 
-    <div id="prop-modal" class="modal">
-        <div class="modal-box" style="background:white; color:black; width:300px;">
-            <button class="close-modal" onclick="document.getElementById('prop-modal').style.display='none'" style="color:black;">×</button>
-            <h3>Component Properties</h3>
+    <div id="toolbar" class="absolute top-4 left-1/2 -translate-x-1/2 h-14 bg-white/90 backdrop-blur-md shadow-xl rounded-full border border-white/20 z-30 flex items-center px-2 gap-2 transition-all max-w-[90vw] overflow-x-auto no-scrollbar">
+        
+        <button id="btn-input-mode" onclick="App.toggleInputMode()" class="toolbar-btn group" title="Toggle Input Method">
+            <i class="ph ph-mouse-simple text-lg"></i> <span class="hidden md:inline text-xs font-bold ml-1">Mouse</span>
+        </button>
+
+        <div class="h-6 w-px bg-slate-200 mx-1"></div>
+        
+        <div class="flex bg-slate-100/50 rounded-full p-1 border border-slate-200/50">
+            <button id="btn-mode-interact" class="tool-pill active" onclick="App.setToolMode('interact')">
+                <i class="ph ph-hand-pointing"></i> <span class="hidden sm:inline ml-1">Interact</span>
+            </button>
+            <button id="btn-mode-wire" class="tool-pill" onclick="App.setToolMode('wire')">
+                <i class="ph ph-plugs"></i> <span class="hidden sm:inline ml-1">Wire</span>
+            </button>
+            <button id="btn-mode-move" class="tool-pill" onclick="App.setToolMode('move')">
+                <i class="ph ph-arrows-out-cardinal"></i> <span class="hidden sm:inline ml-1">Move</span>
+            </button>
+        </div>
+
+        <div class="h-6 w-px bg-slate-200 mx-1"></div>
+
+        <button id="btn-wire-order" onclick="App.toggleWireOrder()" class="toolbar-btn" title="Toggle Wire Layer">
+            <i class="ph ph-stack"></i>
+        </button>
+        <button id="btn-flow" onclick="App.toggleFlowMode()" class="toolbar-btn" title="Visualize Current">
+            <i class="ph ph-waves"></i>
+        </button>
+
+        <div id="hint-text" class="absolute top-16 left-1/2 -translate-x-1/2 bg-slate-800 text-white text-[10px] px-3 py-1 rounded-full shadow-lg opacity-80 pointer-events-none whitespace-nowrap transition-opacity">
+            Select a mode to begin.
+        </div>
+    </div>
+
+    <div id="sidebar" class="absolute top-4 left-4 bottom-4 w-72 bg-white/95 backdrop-blur-xl shadow-2xl rounded-2xl border border-white/40 z-20 flex flex-col transition-transform duration-300 md:translate-x-0 -translate-x-[110%]">
+        
+        <div class="header p-5 border-b border-slate-100 flex justify-between items-center">
+            <div>
+                <h1 class="font-bold text-slate-800 text-lg tracking-tight flex items-center gap-2">
+                    <div class="h-6 w-6 bg-brand-600 rounded flex items-center justify-center text-white text-xs"><i class="ph ph-lightning-fill"></i></div>
+                    ElectroLab
+                </h1>
+                <p class="text-[10px] text-slate-400 font-medium tracking-wider uppercase mt-1">Professional Simulator</p>
+            </div>
+            <button class="md:hidden text-slate-400" onclick="document.getElementById('sidebar').classList.add('-translate-x-[110%]')"><i class="ph ph-x"></i></button>
+        </div>
+        
+        <div class="px-4 pt-4 pb-2">
+            <div class="sidebar-tabs flex p-1 bg-slate-100 rounded-lg">
+                <button id="btn-tab-components" class="tab-btn active flex-1 py-1.5 text-xs font-bold text-center rounded-md transition-all" onclick="App.switchTab('components')">Components</button>
+                <button id="btn-tab-levels" class="tab-btn flex-1 py-1.5 text-xs font-bold text-center rounded-md text-slate-500 hover:text-slate-700 transition-all" onclick="App.switchTab('levels')">Saves</button>
+            </div>
+        </div>
+        
+        <div class="flex-1 overflow-hidden relative">
+            <div id="tab-components" class="tab-content active h-full overflow-y-auto p-4 space-y-6 custom-scrollbar">
+                
+                <div class="palette-section">
+                    <h3 class="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2">
+                        <i class="ph ph-house-line"></i> Mains & Protection
+                    </h3>
+                    <div class="grid grid-cols-2 gap-2">
+                        <button class="palette-btn col-span-2" onclick="App.addComponent('db_board')">Distribution Board</button>
+                        <button class="palette-btn" onclick="App.addComponent('service_head')">Mains Head</button>
+                        <button class="palette-btn" onclick="App.addComponent('main_fuse')">Main Fuse</button>
+                        <button class="palette-btn" onclick="App.addComponent('rcd')">RCD Module</button>
+                        <button class="palette-btn" onclick="App.addComponent('spd_module')">SPD (Surge)</button>
+                        <button class="palette-btn" onclick="App.addComponent('main_switch_100a')">Main SW 100A</button>
+                    </div>
+                    
+                    <div class="my-3 h-px bg-slate-100"></div>
+                    
+                    <div class="grid grid-cols-4 gap-1">
+                        <button class="mini-btn" onclick="App.addComponent('mcb_b6')" title="MCB B6">B6</button>
+                        <button class="mini-btn" onclick="App.addComponent('mcb_b10')" title="MCB B10">B10</button>
+                        <button class="mini-btn" onclick="App.addComponent('mcb_b16')" title="MCB B16">B16</button>
+                        <button class="mini-btn" onclick="App.addComponent('mcb_b20')" title="MCB B20">B20</button>
+                        <button class="mini-btn" onclick="App.addComponent('mcb_b32')" title="MCB B32">B32</button>
+                        <button class="mini-btn" onclick="App.addComponent('rcbo_b6')" title="RCBO B6">RB6</button>
+                        <button class="mini-btn" onclick="App.addComponent('rcbo_b32')" title="RCBO B32">RB32</button>
+                    </div>
+                </div>
+
+                <div class="palette-section">
+                    <h3 class="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2">
+                        <i class="ph ph-lightbulb"></i> Wiring & Loads
+                    </h3>
+                    <div class="space-y-2">
+                        <button class="palette-btn w-full" onclick="App.addComponent('sw_1way')"><i class="ph ph-toggle-left mr-2"></i> 1-Way Switch</button>
+                        <button class="palette-btn w-full" onclick="App.addComponent('sw_2way')"><i class="ph ph-toggle-right mr-2"></i> 2-Way Switch</button>
+                        <button class="palette-btn w-full" onclick="App.addComponent('socket')"><i class="ph ph-plug mr-2"></i> Socket Outlet</button>
+                        <button class="palette-btn w-full" onclick="App.addComponent('lamp')"><i class="ph ph-lightbulb mr-2"></i> Lamp Holder</button>
+                        <button class="palette-btn w-full" onclick="App.addComponent('junction_box')"><i class="ph ph-circles-three-plus mr-2"></i> Junction Box</button>
+                    </div>
+                </div>
+
+                <div class="palette-section">
+                    <h3 class="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2">
+                        <i class="ph ph-sun"></i> Renewables
+                    </h3>
+                    <div class="grid grid-cols-2 gap-2">
+                        <button class="palette-btn" onclick="App.addComponent('pv_panel')">PV Panel</button>
+                        <button class="palette-btn" onclick="App.addComponent('inverter')">Hybrid Inverter</button>
+                        <button class="palette-btn" onclick="App.addComponent('battery_ac')">Powerwall</button>
+                        <button class="palette-btn" onclick="App.addComponent('ev_charger')">EV Charger</button>
+                    </div>
+                </div>
+                
+                 <div class="palette-section">
+                    <h3 class="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2">
+                        <i class="ph ph-factory"></i> Industrial
+                    </h3>
+                    <div class="grid grid-cols-2 gap-2">
+                        <button class="palette-btn" onclick="App.addComponent('supply_3ph')">3-Phase Supply</button>
+                        <button class="palette-btn" onclick="App.addComponent('motor_3ph')">3-Phase Motor</button>
+                        <button class="palette-btn" onclick="App.addComponent('contactor_3ph')">Contactor</button>
+                        <button class="palette-btn" onclick="App.addComponent('plc_mini')">PLC Unit</button>
+                        <button class="palette-btn" onclick="App.addComponent('btn_start')">Start Button</button>
+                        <button class="palette-btn" onclick="App.addComponent('btn_stop')">Stop Button</button>
+                    </div>
+                </div>
+            </div>
+
+            <div id="tab-levels" class="tab-content hidden h-full overflow-y-auto p-4 custom-scrollbar">
+                <div id="level-list-container" class="space-y-3"></div>
+            </div>
+        </div>
+
+        <div class="controls p-4 border-t border-slate-200 bg-slate-50/50 rounded-b-2xl space-y-3">
+            <div>
+                <label class="control-label text-[10px] font-bold text-slate-400 uppercase mb-1 block">Conductor</label>
+                <select id="cable-select" onchange="App.setCable(this.value)" class="w-full text-xs p-2 rounded border border-slate-300 bg-white focus:ring-2 focus:ring-brand-500 outline-none">
+                    <optgroup label="Twin & Earth">
+                        <option value="1.0">1.0 mm² (Lighting)</option>
+                        <option value="1.5">1.5 mm²</option>
+                        <option value="2.5" selected>2.5 mm² (Sockets)</option>
+                        <option value="6.0">6.0 mm² (Cooker)</option>
+                    </optgroup>
+                    <optgroup label="Single Core">
+                        <option value="earth">Earth (G/Y)</option>
+                        <option value="neutral">Neutral (Blue)</option>
+                        <option value="phase_l2">L2 (Black)</option>
+                        <option value="control_pos">+24V (Red)</option>
+                    </optgroup>
+                </select>
+            </div>
+
+            <button id="btn-power" onclick="App.togglePower()" class="w-full py-2.5 rounded-lg font-bold text-sm shadow-sm transition-all bg-emerald-500 hover:bg-emerald-600 text-white flex items-center justify-center gap-2">
+                <i class="ph ph-power"></i> <span>Power ON</span>
+            </button>
             
-            <label>Label:</label>
-            <input type="text" id="prop-label" style="width:100%; margin-bottom:10px;">
+            <div class="grid grid-cols-3 gap-2">
+                <button class="btn-secondary py-2 text-xs font-semibold bg-white border border-slate-300 rounded hover:bg-slate-50 text-slate-600" onclick="App.saveToCloud()">
+                    <i class="ph ph-cloud-arrow-up"></i> Save
+                </button>
+                <button class="btn-secondary py-2 text-xs font-semibold bg-white border border-slate-300 rounded hover:bg-slate-50 text-slate-600" onclick="App.clear()">
+                    <i class="ph ph-trash"></i> Clear
+                </button>
+                <button class="btn-secondary py-2 text-xs font-semibold bg-white border border-brand-200 rounded hover:bg-brand-50 text-brand-600" onclick="App.submitToLMS()">
+                    <i class="ph ph-paper-plane-right"></i> Submit
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <button class="md:hidden absolute top-4 left-4 z-10 bg-white p-2 rounded shadow border border-slate-200" onclick="document.getElementById('sidebar').classList.remove('-translate-x-[110%]')">
+        <i class="ph ph-list text-xl"></i>
+    </button>
+
+    <div class="meter-panel absolute top-20 right-4 w-60 bg-slate-800/90 backdrop-blur-xl rounded-xl shadow-2xl border border-slate-700/50 z-20 overflow-hidden ring-1 ring-white/10">
+        <div class="bg-slate-900 p-2 flex justify-between items-center border-b border-slate-700">
+            <span class="text-[10px] font-bold text-brand-400 uppercase tracking-widest"><i class="ph ph-gauge"></i> Fluke 117</span>
+            <div class="h-1.5 w-1.5 bg-green-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.8)]"></div>
+        </div>
+        <div class="p-4">
+            <div id="meter-display" class="bg-[#9ca3af] text-slate-900 font-mono text-2xl font-bold p-3 rounded mb-4 text-right shadow-inner border-[3px] border-slate-700 relative">
+                --- <span class="text-[10px] absolute top-1 left-1 opacity-50">AUTO</span>
+            </div>
+            <div class="meter-controls grid grid-cols-4 gap-1">
+                <button id="btn-meter-v" onclick="Meter.setMode('volts')" class="meter-btn">V~</button>
+                <button id="btn-meter-o" onclick="Meter.setMode('ohms')" class="meter-btn">Ω</button>
+                <button id="btn-meter-m" onclick="Meter.setMode('megger')" class="meter-btn">MΩ</button>
+                <button id="btn-meter-off" onclick="Meter.setMode('off')" class="meter-btn active bg-red-500/20 text-red-400 border-red-500/50">OFF</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="prop-modal" class="modal fixed inset-0 bg-slate-900/60 hidden z-50 items-center justify-center backdrop-blur-sm">
+        <div class="modal-box bg-white rounded-xl shadow-2xl w-80 p-5 transform scale-100 transition-all border border-slate-200">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="font-bold text-slate-800">Edit Component</h3>
+                <button class="close-modal text-slate-400 hover:text-red-500" onclick="document.getElementById('prop-modal').style.display='none'"><i class="ph ph-x text-lg"></i></button>
+            </div>
             
-            <label>Fault Condition:</label>
-            <select id="prop-fault" style="width:100%; margin-bottom:15px;">
+            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Label</label>
+            <input type="text" id="prop-label" class="w-full border border-slate-300 rounded p-2 mb-4 text-sm focus:ring-2 focus:ring-brand-500 outline-none">
+            
+            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Fault Condition</label>
+            <select id="prop-fault" class="w-full border border-slate-300 rounded p-2 mb-6 text-sm bg-slate-50">
                 <option value="none">None (Normal)</option>
                 <option value="open">Open Circuit</option>
                 <option value="short_ln">Short Circuit (L-N)</option>
                 <option value="earth_le">Earth Fault (L-E)</option>
             </select>
             
-            <div style="text-align:right;">
-                <button onclick="App.saveProperty()" class="btn-power" style="width:auto; padding:8px 16px;">Save</button>
+            <div class="text-right">
+                <button onclick="App.saveProperty()" class="bg-brand-600 hover:bg-brand-700 text-white px-4 py-2 rounded-lg font-bold text-sm shadow-md transition">Save Changes</button>
             </div>
         </div>
     </div>
 
-    <div id="plc-modal" class="modal" onclick="closePLCModal()">
-        <div class="modal-box" style="width: 550px; background:#1e293b; color:white;" onclick="event.stopPropagation()">
-            <button class="close-modal" onclick="closePLCModal()" style="color:white;">×</button>
-            <h3 style="margin-top:0; color:#facc15;">💻 PLC Ladder Logic Editor</h3>
-            <p style="color:#94a3b8; font-size:12px;">Click slots to configure contacts and coils. Power flows from left to right.</p>
+    <div id="plc-modal" class="modal fixed inset-0 bg-slate-900/80 hidden z-50 items-center justify-center backdrop-blur-sm" onclick="closePLCModal()">
+        <div class="modal-box w-full max-w-2xl bg-slate-800 rounded-xl shadow-2xl p-0 overflow-hidden border border-slate-700" onclick="event.stopPropagation()">
+            <div class="bg-slate-900 p-4 border-b border-slate-700 flex justify-between items-center">
+                <div>
+                    <h3 class="font-bold text-white flex items-center gap-2"><i class="ph ph-cpu text-brand-400"></i> PLC Logic Editor</h3>
+                    <p class="text-[10px] text-slate-400">Ladder Logic v1.0</p>
+                </div>
+                <button class="text-slate-400 hover:text-white" onclick="closePLCModal()"><i class="ph ph-x text-lg"></i></button>
+            </div>
             
-            <div id="ladder-container"></div>
+            <div class="p-6 bg-slate-800">
+                <div id="ladder-container" class="space-y-1 bg-slate-900/50 p-4 rounded-lg border border-slate-700 min-h-[300px]"></div>
+            </div>
 
-            <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:15px;">
-                <button class="btn-secondary" onclick="closePLCModal()" style="background:#334155; color:white; border:none; padding: 8px 16px;">Cancel</button>
-                <button class="btn-power" onclick="savePLCLogic()" style="background:#22c55e; color:white; border:none; padding: 8px 16px; width:auto;">💾 Download Program</button>
+            <div class="p-4 bg-slate-900 border-t border-slate-700 flex justify-end gap-3">
+                <button class="px-4 py-2 rounded text-slate-400 hover:text-white text-sm font-medium" onclick="closePLCModal()">Cancel</button>
+                <button class="px-4 py-2 bg-brand-600 hover:bg-brand-500 text-white rounded font-bold text-sm shadow-lg flex items-center gap-2" onclick="savePLCLogic()">
+                    <i class="ph ph-download-simple"></i> Upload Program
+                </button>
             </div>
         </div>
     </div>
@@ -249,9 +285,4 @@
     
     <script type="module" src="main.js"></script>
 </body>
-
-
-</body>
-
 </html>
-
